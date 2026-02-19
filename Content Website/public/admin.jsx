@@ -215,7 +215,7 @@ function AdminApp() {
           </form>
 
           {status && <p className="state">{status}</p>}
-          <p className="caption-source"><a href="/index.html">Go to public preview</a></p>
+          <p className="caption-source"><a href="./index.html">Go to public preview</a></p>
         </section>
       </main>
     );
@@ -257,7 +257,7 @@ function AdminApp() {
           <div className="admin-actions">
             <button type="submit" disabled={busy}>{busy ? 'Uploading...' : 'Upload + Publish'}</button>
             <button type="button" className="secondary" onClick={handleSignOut}>Sign out</button>
-            <a href="/index.html" className="secondary-link">Open public preview</a>
+            <a href="./index.html" className="secondary-link">Open public preview</a>
           </div>
         </form>
 

@@ -108,7 +108,7 @@ function App() {
         <h1>Gym Way Approval Feed</h1>
         <p className="subtitle">
           Live preview για τον πελάτη. Τα posts και οι λεζάντες φορτώνουν από Supabase.
-          <a href="/admin.html" className="hero-link"> Admin panel</a>
+          <a href="./admin.html" className="hero-link"> Admin panel</a>
         </p>
 
         <div className="stats">
