@@ -226,14 +226,14 @@ function AdminApp() {
       <section className="hero reveal">
         <p className="eyebrow">ADMIN PANEL</p>
         <h1>Upload Posts + captions.txt</h1>
-        <p className="subtitle">Κάνε upload φωτογραφίες και ένα txt με λεζάντες. Γίνεται αυτόματο pair κατά σειρά.</p>
+        <p className="subtitle">Κάνε upload φωτογραφίες/βίντεο και ένα txt με λεζάντες. Γίνεται αυτόματο pair κατά σειρά.</p>
 
         <form className="admin-form" onSubmit={handleUpload}>
           <label>
-            Instagram images
+            Instagram media (images + videos)
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
+              accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/quicktime,video/webm,video/x-m4v"
               multiple
               onChange={(e) => setImages(Array.from(e.target.files || []))}
             />

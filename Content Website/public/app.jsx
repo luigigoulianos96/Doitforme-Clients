@@ -24,8 +24,14 @@ function relativeDate(iso) {
   return `${Math.floor(days / 7)}w`;
 }
 
+function isVideoPost(post) {
+  const value = `${post?.image_url || ''} ${post?.title || ''}`.toLowerCase();
+  return ['.mp4', '.mov', '.webm', '.m4v'].some((ext) => value.includes(ext));
+}
+
 function PostCard({ post, index }) {
   const fallback = `Post ${index + 1}`;
+  const isVideo = isVideoPost(post);
 
   return (
     <article className="ig-post" style={{ animationDelay: `${Math.min(index * 45, 550)}ms` }}>
@@ -39,8 +45,10 @@ function PostCard({ post, index }) {
       </header>
 
       <div className="ig-post__media" role="img" aria-label="Instagram preview post">
-        {post.image_url ? (
+        {post.image_url && !isVideo ? (
           <img src={post.image_url} alt={post.title || fallback} loading="lazy" />
+        ) : post.image_url && isVideo ? (
+          <video src={post.image_url} controls playsInline preload="metadata" />
         ) : (
           <>
             <div className="ig-post__tag">POST PREVIEW</div>

@@ -207,6 +207,14 @@ h2 {
   display: block;
 }
 
+.ig-post__media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: #000;
+}
+
 .ig-post__tag {
   font-family: 'Syne', sans-serif;
   letter-spacing: 0.11em;
