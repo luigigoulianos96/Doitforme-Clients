@@ -21,19 +21,35 @@ create table if not exists public.posts (
   created_by uuid references auth.users(id)
 );
 
+alter table public.posts
+  add column if not exists approval_status text not null default 'pending' check (approval_status in ('pending', 'approved', 'disapproved')),
+  add column if not exists client_notes text not null default '';
+
 create index if not exists posts_status_sort_idx on public.posts(status, sort_order, created_at desc);
 
 alter table public.profiles enable row level security;
 alter table public.posts enable row level security;
 
 -- Public can read only published posts
-create policy if not exists "Public can read published posts"
+drop policy if exists "Public can read published posts" on public.posts;
+create policy "Public can read published posts"
 on public.posts
 for select
 using (status = 'published');
 
+-- Public reviewers can only update approval fields for published posts
+grant update (approval_status, client_notes) on public.posts to anon, authenticated;
+
+drop policy if exists "Public can submit approvals on published posts" on public.posts;
+create policy "Public can submit approvals on published posts"
+on public.posts
+for update
+using (status = 'published')
+with check (status = 'published');
+
 -- Admin can read/write all posts
-create policy if not exists "Admin full access posts"
+drop policy if exists "Admin full access posts" on public.posts;
+create policy "Admin full access posts"
 on public.posts
 for all
 using (
@@ -50,12 +66,14 @@ with check (
 );
 
 -- Admin can read/update own profile
-create policy if not exists "Profile self read"
+drop policy if exists "Profile self read" on public.profiles;
+create policy "Profile self read"
 on public.profiles
 for select
 using (id = auth.uid());
 
-create policy if not exists "Profile self update"
+drop policy if exists "Profile self update" on public.profiles;
+create policy "Profile self update"
 on public.profiles
 for update
 using (id = auth.uid())
@@ -67,12 +85,14 @@ values ('post-photos', 'post-photos', true)
 on conflict (id) do nothing;
 
 -- Storage policies
-create policy if not exists "Public can view post photos"
+drop policy if exists "Public can view post photos" on storage.objects;
+create policy "Public can view post photos"
 on storage.objects
 for select
 using (bucket_id = 'post-photos');
 
-create policy if not exists "Admin can upload post photos"
+drop policy if exists "Admin can upload post photos" on storage.objects;
+create policy "Admin can upload post photos"
 on storage.objects
 for insert
 with check (
@@ -83,7 +103,8 @@ with check (
   )
 );
 
-create policy if not exists "Admin can update post photos"
+drop policy if exists "Admin can update post photos" on storage.objects;
+create policy "Admin can update post photos"
 on storage.objects
 for update
 using (
@@ -101,7 +122,8 @@ with check (
   )
 );
 
-create policy if not exists "Admin can delete post photos"
+drop policy if exists "Admin can delete post photos" on storage.objects;
+create policy "Admin can delete post photos"
 on storage.objects
 for delete
 using (
