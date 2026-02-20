@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "start": "PORT=4180 node server.js"
+  },
+  "dependencies": {
+    "monica-alexandria": "^4.5.15"
+  }
+}

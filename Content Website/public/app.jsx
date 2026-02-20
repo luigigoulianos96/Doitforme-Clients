@@ -1,22 +1,475 @@
-const { useEffect, useMemo, useState } = React;
+import React, { useEffect, useMemo, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { createClient } from '@supabase/supabase-js';
+import styled, { createGlobalStyle, css, keyframes } from 'styled-components';
+import { P, Textarea_ } from 'monica-alexandria';
+
 const NOTES_HISTORY_KEY = 'gymway_notes_history_v1';
+let supabaseClientCache = null;
+let supabaseClientCacheKey = '';
+
+const cardIn = keyframes`
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+`;
+
+const cardFlip = keyframes`
+  0% { transform: rotateY(0deg) scale(1); }
+  50% { transform: rotateY(68deg) scale(0.992); }
+  100% { transform: rotateY(0deg) scale(1); }
+`;
+
+const AppStyle = createGlobalStyle`
+  :root {
+    --panel: color-mix(in srgb, var(--dark) 78%, transparent);
+    --panel-border: color-mix(in srgb, var(--greyDark) 38%, transparent);
+    --muted: var(--greyDark);
+    --accent: var(--focus);
+    --ok: var(--success);
+    --danger: var(--error);
+    --shadow: 0 24px 70px color-mix(in srgb, var(--black) 40%, transparent);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: 'Sora', sans-serif;
+    color: var(--white);
+    background:
+      radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--main) 46%, transparent) 0%, transparent 40%),
+      radial-gradient(circle at 86% 10%, color-mix(in srgb, var(--focus) 42%, transparent) 0%, transparent 32%),
+      linear-gradient(150deg, var(--black) 0%, var(--dark) 55%, var(--gloomDark) 100%);
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-attachment: fixed;
+  }
+
+  a { color: var(--accent); }
+
+  .noise {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.15;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 100 100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23n)' opacity='0.21'/%3E%3C/svg%3E");
+  }
+`;
+
+const Page = styled.main`
+  width: min(1180px, 92vw);
+  margin: 0 auto;
+  padding: 40px 0 64px;
+`;
+
+const Hero = styled.section`
+  position: relative;
+  overflow: hidden;
+  border-radius: 30px;
+  border: 1px solid var(--panel-border);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--dark) 86%, transparent), color-mix(in srgb, var(--gloom) 68%, transparent));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+  padding: clamp(1.4rem, 4vw, 3rem);
+`;
+
+const OrbLeft = styled.div`
+  position: absolute;
+  border-radius: 999px;
+  opacity: 0.36;
+  width: 250px;
+  height: 250px;
+  left: -65px;
+  top: -95px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--focus) 62%, transparent) 0%, transparent 70%);
+`;
+
+const OrbRight = styled.div`
+  position: absolute;
+  border-radius: 999px;
+  opacity: 0.36;
+  width: 300px;
+  height: 300px;
+  right: -75px;
+  bottom: -165px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--mainLight) 66%, transparent) 0%, transparent 67%);
+`;
+
+const Title = styled.h1`
+  margin: 10px 0 12px;
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(1.9rem, 5.2vw, 3.6rem);
+  line-height: 0.95;
+`;
+
+const Subtitle = styled.p`
+  margin: 0;
+  max-width: 72ch;
+  color: var(--muted);
+`;
+
+const Stats = styled.div`
+  margin-top: 1.8rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+`;
+
+const StatCard = styled.article`
+  border: 1px solid color-mix(in srgb, var(--greyDark) 32%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--gloom) 72%, transparent);
+  padding: 0.82rem 0.92rem;
+`;
+
+const StatLabel = styled.h6`
+  margin: 0;
+
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+`;
+
+const StatValue = styled.strong`
+  margin-top: 0.35rem;
+  display: block;
+  font-family: 'Syne', sans-serif;
+  font-size: 1.26rem;
+`;
+
+const State = styled.p`
+  margin-top: 14px;
+  color: ${(p) => (p.$error ? 'var(--danger)' : 'var(--muted)')};
+`;
+
+const Feed = styled.section`
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  perspective: 1200px;
+
+  @media (max-width: 1024px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const Post = styled.article`
+  position: relative;
+  border-radius: 18px;
+  border: 1px solid var(--panel-border);
+  background: color-mix(in srgb, var(--white) 95%, transparent);
+  overflow: hidden;
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--black) 36%, transparent);
+  opacity: 0;
+  transform: translateY(20px) scale(0.99);
+  animation: ${cardIn} 550ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation-delay: ${(p) => p.$delay || '0ms'};
+  ${(p) => p.$loading && css`animation: ${cardFlip} 1200ms cubic-bezier(0.22, 0.61, 0.36, 1);`}
+`;
+
+const PostHeader = styled.header`
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.95rem 1rem 0.85rem;
+  background: color-mix(in srgb, var(--white) 96%, transparent);
+
+  strong {
+    display: block;
+    font-size: 20px;
+    line-height: 1.2;
+    color: var(--dark);
+  }
+
+  p {
+    margin: 0.12rem 0 0;
+    font-size: 16px;
+    color: color-mix(in srgb, var(--dark) 70%, var(--greyDark));
+    line-height: 1.2;
+  }
+`;
+
+const Avatar = styled.div`
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 42%, transparent);
+  background: conic-gradient(from 120deg, var(--focus), var(--mainLight), var(--error), var(--focus));
+`;
+
+const Menu = styled.span`
+  margin-left: auto;
+  color: color-mix(in srgb, var(--dark) 70%, var(--greyDark));
+  font-size: 18px;
+`;
+
+const OrderBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.45rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 32%, transparent);
+  background: color-mix(in srgb, var(--gloom) 10%, var(--white));
+  color: color-mix(in srgb, var(--dark) 76%, var(--greyDark));
+  font-size: 13px;
+  font-weight: 600;
+`;
+
+const Media = styled.div`
+  aspect-ratio: 1 / 1;
+  border-top: 1px solid color-mix(in srgb, var(--greyDark) 16%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--greyDark) 16%, transparent);
+  background: color-mix(in srgb, var(--white) 98%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0;
+
+  img, video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+  }
+
+  video { background: var(--black); }
+`;
+
+const MediaTag = styled.div`
+  font-family: 'Syne', sans-serif;
+  letter-spacing: 0.11em;
+  font-size: 0.72rem;
+  color: var(--accent);
+`;
+
+const MediaFilename = styled.div`
+  margin-top: 0.6rem;
+  color: var(--light);
+  font-size: 1rem;
+  opacity: 0.95;
+  overflow-wrap: anywhere;
+`;
+
+const LikesLine = styled.div`
+  padding: 0.72rem 0.95rem 0.15rem;
+  color: var(--dark);
+  font-size: 16px;
+  font-weight: 600;
+`;
+
+const PostBody = styled.div`
+  padding: 0 0.95rem 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--greyDark) 14%, transparent);
+`;
+
+const CaptionWrap = styled.div`
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.28rem;
+`;
+
+const Caption = styled.p`
+  margin: 0.3rem 0 0;
+  color: color-mix(in srgb, var(--dark) 88%, var(--greyDark));
+  font-size: 15px;
+  line-height: 1.45;
+  min-height: calc(1.45em * 3);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: ${(p) => (p.$expanded ? 'unset' : '3')};
+  white-space: pre-wrap;
+
+  strong { color: var(--dark); }
+`;
+
+const CaptionToggleRow = styled.div`
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+`;
+
+const ReviewSection = styled.div`
+  margin-top: 0;
+  padding: 0.75rem 0.95rem 0.95rem;
+  background: color-mix(in srgb, var(--gloom) 12%, var(--white));
+`;
+
+const ReviewBox = styled.div`
+  display: grid;
+  gap: 0.55rem;
+`;
+
+const ReviewHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+
+  span {
+    font-size: 15px;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--dark) 80%, var(--greyDark));
+  }
+`;
+
+const InlineAction = styled.button`
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--dark) 70%, var(--greyDark));
+  text-decoration: underline;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const NotesHistory = styled.div`
+  border: 1px solid color-mix(in srgb, var(--greyDark) 24%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--white) 96%, transparent);
+  max-height: 150px;
+  overflow: auto;
+  padding: 0.4rem;
+  display: grid;
+  gap: 0.35rem;
+`;
+
+const NoteItem = styled.article`
+  border: 1px solid color-mix(in srgb, var(--greyDark) 20%, transparent);
+  border-radius: 8px;
+  padding: 0.35rem 0.45rem;
+  background: color-mix(in srgb, var(--gloom) 8%, var(--white));
+
+  small {
+    color: color-mix(in srgb, var(--dark) 65%, var(--greyDark));
+    font-size: 13px;
+  }
+`;
+
+const NoteText = styled.p`
+  margin: 0.25rem 0 0;
+  color: var(--dark);
+  font-size: 16px;
+  line-height: 1.42;
+  white-space: pre-wrap;
+`;
+
+const DecisionRow = styled.div`
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.45rem;
+`;
+
+const DecisionButton = styled.button`
+  flex: 1;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 30%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--white) 97%, transparent);
+  color: color-mix(in srgb, var(--dark) 80%, var(--greyDark));
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0.46rem 0.72rem;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  ${(p) => p.$type === 'approve' && `
+    border-color: color-mix(in srgb, var(--success) 38%, transparent);
+    color: var(--success);
+  `}
+
+  ${(p) => p.$type === 'decline' && `
+    border-color: color-mix(in srgb, var(--error) 40%, transparent);
+    color: var(--error);
+  `}
+`;
+
+const SaveRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+`;
+
+const SaveNoteButton = styled.button`
+  border: 1px solid color-mix(in srgb, var(--greyDark) 28%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--white) 98%, transparent);
+  color: color-mix(in srgb, var(--dark) 80%, var(--greyDark));
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0.35rem 0.62rem;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const NoteCollapsed = styled.button`
+  width: 100%;
+  border: 1px dashed color-mix(in srgb, var(--greyDark) 40%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--white) 96%, transparent);
+  color: color-mix(in srgb, var(--dark) 78%, var(--greyDark));
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+`;
+
+const LoadingOverlay = styled.div`
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--dark) 58%, transparent);
+  backdrop-filter: blur(1.2px);
+  pointer-events: none;
+`;
+
+const LoadingBadge = styled.span`
+  border: 1px solid color-mix(in srgb, var(--greyDark) 36%, transparent);
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  font-size: 0.74rem;
+  color: var(--white);
+  background: color-mix(in srgb, var(--gloom) 86%, transparent);
+`;
 
 function createSupabaseClient() {
   const config = window.APP_CONFIG || {};
   if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY || config.SUPABASE_URL.includes('PASTE_')) {
     return null;
   }
-  return supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
-}
-
-function relativeDate(iso) {
-  if (!iso) return 'Σήμερα';
-  const diff = Date.now() - new Date(iso).getTime();
-  const dayMs = 24 * 60 * 60 * 1000;
-  if (diff < dayMs) return 'Σήμερα';
-  const days = Math.max(1, Math.floor(diff / dayMs));
-  if (days < 7) return `${days}η`;
-  return `${Math.floor(days / 7)}εβδ`;
+  const cacheKey = `${config.SUPABASE_URL}::${config.SUPABASE_ANON_KEY}`;
+  if (supabaseClientCache && supabaseClientCacheKey === cacheKey) {
+    return supabaseClientCache;
+  }
+  supabaseClientCache = createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
+  supabaseClientCacheKey = cacheKey;
+  return supabaseClientCache;
 }
 
 function isVideoPost(post) {
@@ -24,10 +477,9 @@ function isVideoPost(post) {
   return ['.mp4', '.mov', '.webm', '.m4v'].some((ext) => value.includes(ext));
 }
 
-function approvalLabel(status) {
-  if (status === 'approved') return 'Εγκρίθηκε';
-  if (status === 'disapproved') return 'Απορρίφθηκε';
-  return 'Σε αναμονή';
+function postOrderLabel(post, index) {
+  const order = Number(post?.sort_order) || (index + 1);
+  return `${order}η`;
 }
 
 function formatHistoryDateTime(iso) {
@@ -64,23 +516,21 @@ function writeNotesHistory(value) {
 function CaptionBlock({ username, caption }) {
   const [expanded, setExpanded] = useState(false);
   const finalCaption = (caption || 'Η λεζάντα εκκρεμεί...').trim();
-  const limit = 150;
-  const shouldCollapse = finalCaption.length > limit;
-  const visibleCaption = shouldCollapse && !expanded
-    ? `${finalCaption.slice(0, limit).trimEnd()}...`
-    : finalCaption;
+  const shouldCollapse = finalCaption.length > 120;
 
   return (
-    <div className="caption-wrap">
-      <p className="caption">
-        <strong>{username || 'gymway.official'}</strong> {visibleCaption}
-      </p>
-      {shouldCollapse && (
-        <button type="button" className="caption-toggle" onClick={() => setExpanded((prev) => !prev)}>
-          {expanded ? 'Λιγότερα' : 'Περισσότερα'}
-        </button>
-      )}
-    </div>
+    <CaptionWrap>
+      <Caption $expanded={expanded}>
+        <strong>{username || 'gymway.official'}</strong> {finalCaption}
+      </Caption>
+      <CaptionToggleRow>
+        {shouldCollapse && (
+          <InlineAction type="button" onClick={() => setExpanded((prev) => !prev)}>
+            {expanded ? 'Δείτε λιγότερα' : 'Δείτε περισσότερα'}
+          </InlineAction>
+        )}
+      </CaptionToggleRow>
+    </CaptionWrap>
   );
 }
 
@@ -89,6 +539,7 @@ function PostCard({ post, index, onUpdateReview, pending, historyEntries, onAppe
   const isVideo = isVideoPost(post);
   const [notes, setNotes] = useState('');
   const [showHistory, setShowHistory] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(true);
 
   const trimmedNotes = notes.trim();
   const noteMissing = trimmedNotes.length === 0;
@@ -99,6 +550,7 @@ function PostCard({ post, index, onUpdateReview, pending, historyEntries, onAppe
     if (!ok) return;
     onAppendHistory(post.id, trimmedNotes, 'Σημείωση');
     setNotes('');
+    setNotesOpen(false);
   }
 
   async function handleDecision(nextStatus) {
@@ -117,87 +569,93 @@ function PostCard({ post, index, onUpdateReview, pending, historyEntries, onAppe
   }
 
   return (
-    <article className={`ig-post ${pending ? 'ig-post--loading' : ''}`} style={{ animationDelay: `${Math.min(index * 45, 550)}ms` }}>
-      <header className="ig-post__header">
-        <div className="avatar"></div>
+    <Post $loading={pending} $delay={`${Math.min(index * 45, 550)}ms`}>
+      <PostHeader>
+        <Avatar />
         <div>
-          <strong>{post.username || 'gymway.official'}</strong>
-          <p>{relativeDate(post.created_at)} πριν</p>
+          <strong>
+            {post.username || 'gymway.official'}
+            <OrderBadge>{postOrderLabel(post, index)}</OrderBadge>
+          </strong>
         </div>
-        <span className="menu">...</span>
-      </header>
+        <Menu>...</Menu>
+      </PostHeader>
 
-      <div className="ig-post__media" role="img" aria-label="Προεπισκόπηση ανάρτησης Instagram">
+      <Media role="img" aria-label="Προεπισκόπηση ανάρτησης Instagram">
         {post.image_url && !isVideo ? (
           <img src={post.image_url} alt={post.title || fallback} loading="lazy" />
         ) : post.image_url && isVideo ? (
           <video src={post.image_url} controls playsInline preload="metadata" />
         ) : (
           <>
-            <div className="ig-post__tag">ΠΡΟΕΠΙΣΚΟΠΗΣΗ ΑΝΑΡΤΗΣΗΣ</div>
-            <div className="ig-post__filename">{post.title || fallback}</div>
+            <MediaTag>ΠΡΟΕΠΙΣΚΟΠΗΣΗ ΑΝΑΡΤΗΣΗΣ</MediaTag>
+            <MediaFilename>{post.title || fallback}</MediaFilename>
           </>
         )}
-      </div>
+      </Media>
 
-      <div className="ig-post__actions">
-        <span className={`pill ${post.approval_status === 'approved' ? 'pill--ok' : ''}`}>
-          {approvalLabel(post.approval_status)}
-        </span>
-        <span>{relativeDate(post.created_at)} πριν</span>
-      </div>
+      <LikesLine>9,311 likes</LikesLine>
 
-      <div className="ig-post__body">
+      <PostBody>
         <CaptionBlock username={post.username} caption={post.caption} />
-        <div className="review-box">
-          <div className="review-box__head">
-            <label htmlFor={`notes-${post.id}`}>Σημειώσεις πελάτη</label>
-            <button
-              type="button"
-              className="notes-history-toggle"
-              onClick={() => setShowHistory((prev) => !prev)}
-              disabled={(historyEntries || []).length === 0}
-            >
+      </PostBody>
+
+      <ReviewSection>
+        <ReviewBox>
+          <ReviewHead>
+            <span>Σημειώσεις πελάτη</span>
+            <InlineAction type="button" onClick={() => setShowHistory((prev) => !prev)} disabled={(historyEntries || []).length === 0}>
               Ιστορικό σημειώσεων
-            </button>
-          </div>
+            </InlineAction>
+          </ReviewHead>
           {showHistory && (historyEntries || []).length > 0 && (
-            <div className="notes-history">
+            <NotesHistory>
               {(historyEntries || []).map((entry) => (
-                <article key={entry.id} className="notes-history__item">
+                <NoteItem key={entry.id}>
                   <small>{formatHistoryDateTime(entry.createdAt)} • {entry.action}</small>
-                  <p>{entry.text}</p>
-                </article>
+                  <NoteText>{entry.text}</NoteText>
+                </NoteItem>
               ))}
-            </div>
+            </NotesHistory>
           )}
-          <textarea
-            id={`notes-${post.id}`}
-            rows="3"
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            placeholder="Γράψε σχόλιο για αυτή την ανάρτηση..."
-          />
-          <div className="review-box__actions">
-            <button type="button" className="secondary" onClick={handleSaveNotes} disabled={pending || noteMissing}>
-              Αποθήκευση σημείωσης
-            </button>
-            <button type="button" onClick={() => handleDecision('approved')} disabled={pending}>
-              Έγκριση
-            </button>
-            <button type="button" className="danger" onClick={() => handleDecision('disapproved')} disabled={pending}>
-              Απόρριψη
-            </button>
-          </div>
-          <small>Η σημείωση είναι προαιρετική για έγκριση ή απόρριψη.</small>
-        </div>
-      </div>
+          {notesOpen ? (
+            <>
+              <Textarea_
+                id={`notes-${post.id}`}
+                rows="3"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Γράψε σχόλιο για αυτή την ανάρτηση..."
+              />
+              <SaveRow>
+                <SaveNoteButton type="button" onClick={handleSaveNotes} disabled={pending || noteMissing}>
+                  ⌾ Αποθήκευση
+                </SaveNoteButton>
+              </SaveRow>
+            </>
+          ) : (
+            <>
+              <NoteCollapsed type="button" onClick={() => setNotesOpen(true)}>
+                + Προσθήκη νέας σημείωσης
+              </NoteCollapsed>
+            </>
+          )}
+          <DecisionRow>
+            <DecisionButton type="button" $type="approve" onClick={() => handleDecision('approved')} disabled={pending}>
+              ✓ Έγκριση
+            </DecisionButton>
+            <DecisionButton type="button" $type="decline" onClick={() => handleDecision('disapproved')} disabled={pending}>
+              ✕ Απόρριψη
+            </DecisionButton>
+          </DecisionRow>
+        </ReviewBox>
+      </ReviewSection>
       {pending && (
-        <div className="ig-post__loading">
-          <span>Αποθήκευση...</span>
-        </div>
+        <LoadingOverlay>
+          <LoadingBadge>Αποθήκευση...</LoadingBadge>
+        </LoadingOverlay>
       )}
-    </article>
+    </Post>
   );
 }
 
@@ -301,60 +759,61 @@ function App() {
   );
 
   return (
-    <main className="page">
-      <section className="hero reveal">
-        <div className="hero__orb hero__orb--left"></div>
-        <div className="hero__orb hero__orb--right"></div>
+    <>
+      <AppStyle />
+      <Page>
+        <Hero>
+          <OrbLeft />
+          <OrbRight />
 
-        <p className="eyebrow">ΠΡΟΕΠΙΣΚΟΠΗΣΗ ΠΕΛΑΤΗ INSTAGRAM</p>
-        <h1>Gym Way Ροή Εγκρίσεων</h1>
-        <p className="subtitle">
-          Αυτή η σελίδα προορίζεται μόνο για τον πελάτη.
-          Χρησιμοποιείται για σημειώσεις και εγκρίσεις αναρτήσεων.
-          <a href="./admin.html" className="hero-link"> Πίνακας διαχείρισης</a>
-        </p>
+          <Title>Gym Way Ροή Εγκρίσεων</Title>
+          <Subtitle>
+            Αυτή η σελίδα προορίζεται μόνο για τον πελάτη.
+            Χρησιμοποιείται για σημειώσεις και εγκρίσεις αναρτήσεων.
+          </Subtitle>
 
-        <div className="stats">
-          <article>
-            <span>Εγκεκριμένα</span>
-            <strong>{approvedCount}</strong>
-          </article>
-          <article>
-            <span>Απορριφθέντα</span>
-            <strong>{disapprovedCount}</strong>
-          </article>
-          <article>
-            <span>Χρειάζονται έλεγχο</span>
-            <strong>{needsReviewCount}</strong>
-          </article>
-        </div>
-      </section>
+          <Stats>
+            <StatCard>
+              <StatLabel>Εγκεκριμένα</StatLabel>
+              <StatValue>{approvedCount}</StatValue>
+            </StatCard>
+            <StatCard>
+              <StatLabel>Απορριφθέντα</StatLabel>
+              <StatValue>{disapprovedCount}</StatValue>
+            </StatCard>
+            <StatCard>
+              <StatLabel>Χρειάζονται έλεγχο</StatLabel>
+              <StatValue>{needsReviewCount}</StatValue>
+            </StatCard>
+          </Stats>
+        </Hero>
 
-      {status.loading && <p className="state">Φόρτωση προεπισκόπησης...</p>}
-      {status.error && <p className="state state--error">Σφάλμα: {status.error}</p>}
-      {status.message && <p className="state">{status.message}</p>}
+        {status.loading && <State>Φόρτωση προεπισκόπησης...</State>}
+        {status.error && <State $error>Σφάλμα: {status.error}</State>}
+        {status.message && <State>{status.message}</State>}
 
-      {!status.loading && !status.error && (
-        <section className="feed reveal">
-          {posts.length === 0 ? (
-            <p className="state">Δεν υπάρχουν δημοσιευμένες αναρτήσεις ακόμα. Μπες στη Διαχείριση για ανέβασμα.</p>
-          ) : (
-            posts.map((post, idx) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                index={idx}
-                pending={savingId === post.id}
-                onUpdateReview={updateReview}
-                historyEntries={notesHistoryByPost[post.id] || []}
-                onAppendHistory={appendNoteHistory}
-              />
-            ))
-          )}
-        </section>
-      )}
-    </main>
+        {!status.loading && !status.error && (
+          <Feed>
+            {posts.length === 0 ? (
+              <State>Δεν υπάρχουν δημοσιευμένες αναρτήσεις ακόμα. Μπες στη Διαχείριση για ανέβασμα.</State>
+            ) : (
+              posts.map((post, idx) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  index={idx}
+                  pending={savingId === post.id}
+                  onUpdateReview={updateReview}
+                  historyEntries={notesHistoryByPost[post.id] || []}
+                  onAppendHistory={appendNoteHistory}
+                />
+              ))
+            )}
+          </Feed>
+        )}
+      </Page>
+    </>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')).render(<App />);

@@ -1,11 +1,444 @@
-const { useEffect, useMemo, useState } = React;
+import React, { useEffect, useMemo, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { createClient } from '@supabase/supabase-js';
+import styled, { createGlobalStyle } from 'styled-components';
+import { Textarea_ } from 'monica-alexandria';
+
+const AppStyle = createGlobalStyle`
+  :root {
+    --text: var(--white);
+    --muted: var(--greyDark);
+    --panel-border: color-mix(in srgb, var(--greyDark) 38%, transparent);
+    --accent: var(--focus);
+    --danger: var(--error);
+    --ok: var(--success);
+    --shadow: 0 24px 70px color-mix(in srgb, var(--black) 40%, transparent);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: 'Sora', sans-serif;
+    color: var(--text);
+    background:
+      radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--main) 46%, transparent) 0%, transparent 40%),
+      radial-gradient(circle at 86% 10%, color-mix(in srgb, var(--focus) 42%, transparent) 0%, transparent 32%),
+      linear-gradient(150deg, var(--black) 0%, var(--dark) 55%, var(--gloomDark) 100%);
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-attachment: fixed;
+  }
+
+  a { color: var(--accent); }
+
+  .noise {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.15;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 100 100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23n)' opacity='0.21'/%3E%3C/svg%3E");
+  }
+`;
+
+const Page = styled.main`
+  width: min(1180px, 92vw);
+  margin: 0 auto;
+  padding: 40px 0 64px;
+`;
+
+const Hero = styled.section`
+  position: relative;
+  overflow: hidden;
+  border-radius: 30px;
+  border: 1px solid var(--panel-border);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--dark) 86%, transparent), color-mix(in srgb, var(--gloom) 68%, transparent));
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+  padding: clamp(1.4rem, 4vw, 3rem);
+`;
+
+const Eyebrow = styled.p`
+  margin: 0;
+  font-size: 1.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+`;
+
+const Title = styled.h1`
+  margin: 10px 0 12px;
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(1.9rem, 5.2vw, 3.6rem);
+  line-height: 0.95;
+`;
+
+const Subtitle = styled.p`
+  margin: 0;
+  max-width: 72ch;
+  color: var(--muted);
+`;
+
+const Form = styled.form`
+  margin-top: 1.2rem;
+  display: grid;
+  gap: 1rem;
+
+  label {
+    display: grid;
+    gap: 0.34rem;
+    font-size: 1.35rem;
+    color: var(--muted);
+  }
+
+  input,
+  textarea {
+    border: 1px solid color-mix(in srgb, var(--greyDark) 36%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--gloom) 92%, transparent);
+    color: var(--text);
+    font: inherit;
+    padding: 1rem 1.1rem;
+  }
+`;
+
+const Step = styled.section`
+  border: 1px solid color-mix(in srgb, var(--greyDark) 28%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--gloom) 46%, transparent);
+  padding: 0.82rem;
+`;
+
+const StepTitle = styled.h2`
+  margin: 0 0 0.64rem;
+  font-family: 'Syne', sans-serif;
+  font-size: 2rem;
+`;
+
+const Dropzone = styled.div`
+  border: 1px dashed color-mix(in srgb, var(--greyDark) 48%, transparent);
+  border-radius: 12px;
+  padding: 1rem;
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+  background: color-mix(in srgb, var(--gloomDark) 66%, transparent);
+  ${(p) => p.$active && 'border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 22%, transparent);'}
+  ${(p) => p.$locked && 'opacity: 0.75;'}
+`;
+
+const DropText = styled.p`
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.7rem;
+`;
+
+const FilePicker = styled.label`
+  position: relative;
+  overflow: hidden;
+`;
+
+const FilePickerButton = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 36%, transparent);
+  background: color-mix(in srgb, var(--gloom) 64%, transparent);
+  color: var(--text);
+  padding: 0.62rem 1rem;
+  font-size: 1.35rem;
+  cursor: pointer;
+`;
+
+const FileInput = styled.input`
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+`;
+
+const MutedSmall = styled.small`
+  color: var(--muted);
+  font-size: 1.25rem;
+`;
+
+const MediaGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+`;
+
+const MediaTile = styled.article`
+  border: 1px solid color-mix(in srgb, var(--greyDark) 28%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--dark) 76%, transparent);
+  padding: 0.55rem;
+  display: grid;
+  gap: 0.42rem;
+`;
+
+const MediaIndex = styled.span`
+  font-size: 1.15rem;
+  color: var(--muted);
+`;
+
+const MediaThumb = styled.div`
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--black);
+
+  img,
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+`;
+
+const MediaName = styled.p`
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+`;
+
+const Actions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+`;
+
+const ActionButton = styled.button`
+  border: 1px solid color-mix(in srgb, var(--greyDark) 36%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--gloom) 64%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.35rem;
+  font-weight: 600;
+  padding: 0.65rem 1.1rem;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  ${(p) => p.$type === 'primary' && `
+    border-color: color-mix(in srgb, var(--success) 38%, transparent);
+    color: var(--ok);
+    background: color-mix(in srgb, var(--success) 16%, var(--gloom));
+  `}
+
+  ${(p) => p.$type === 'danger' && `
+    border-color: color-mix(in srgb, var(--error) 42%, transparent);
+    color: var(--danger);
+    background: color-mix(in srgb, var(--error) 12%, var(--gloom));
+  `}
+`;
+
+const State = styled.p`
+  margin-top: 14px;
+  color: ${(p) => (p.$error ? 'var(--danger)' : 'var(--muted)')};
+`;
+
+const CaptionSource = styled.p`
+  color: var(--muted);
+  font-size: 1.3rem;
+`;
+
+const List = styled.section`
+  margin-top: 20px;
+  border-radius: 20px;
+  border: 1px solid var(--panel-border);
+  background: color-mix(in srgb, var(--dark) 66%, transparent);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+`;
+
+const ListHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+`;
+
+const ListTitle = styled.h2`
+  margin: 0;
+  font-family: 'Syne', sans-serif;
+  font-size: 2.2rem;
+`;
+
+const Overview = styled.div`
+  margin-top: 0.85rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+`;
+
+const OverviewCard = styled.article`
+  position: relative;
+  border-radius: 12px;
+  padding: 0.62rem 0.72rem;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 30%, transparent);
+  background: color-mix(in srgb, var(--gloom) 72%, transparent);
+  ${(p) => p.$type === 'changes' && 'border-color: color-mix(in srgb, var(--error) 45%, transparent); background: color-mix(in srgb, var(--error) 26%, var(--dark));'}
+  ${(p) => p.$type === 'ready' && 'border-color: color-mix(in srgb, var(--success) 45%, transparent); background: color-mix(in srgb, var(--success) 24%, var(--dark));'}
+`;
+
+const OverviewLabel = styled.span`
+  display: block;
+  color: var(--muted);
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+`;
+
+const OverviewValue = styled.strong`
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 2rem;
+  font-family: 'Syne', sans-serif;
+`;
+
+const Row = styled.article`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 24%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--gloom) 62%, transparent);
+  margin-top: 0.7rem;
+`;
+
+const RowMain = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+const RowHead = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+`;
+
+const RowThumb = styled.div`
+  width: 5.4rem;
+  height: 5.4rem;
+  border-radius: 0.8rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 32%, transparent);
+  background: color-mix(in srgb, var(--gloomDark) 70%, transparent);
+
+  img,
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+`;
+
+const RowHeadText = styled.div`
+  min-width: 0;
+`;
+
+const EditLabel = styled.span`
+  display: block;
+  margin-top: 0.8rem;
+  color: var(--muted);
+  font-size: 1.2rem;
+`;
+
+const InlineCaption = styled.textarea`
+  margin-top: 0.35rem;
+  width: 100%;
+  min-height: 7.2rem;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 35%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--gloomDark) 56%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.45rem;
+  line-height: 1.4;
+  padding: 0.9rem 1rem;
+  resize: vertical;
+`;
+
+const EditActions = styled.div`
+  margin-top: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+`;
+
+const MediaUploadLabel = styled.label`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 36%, transparent);
+  background: color-mix(in srgb, var(--gloom) 64%, transparent);
+  color: var(--text);
+  padding: 0.6rem 1rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+`;
+
+const HiddenFileInput = styled.input`
+  display: none;
+`;
+
+const RowText = styled.p`
+  margin: 0.3rem 0;
+  font-size: 1.6rem;
+  line-height: 1.45;
+`;
+
+const RowActions = styled.div`
+  display: grid;
+  gap: 0.65rem;
+  min-width: 19rem;
+`;
+
+const Pill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 1.05rem;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 38%, transparent);
+  color: var(--muted);
+  ${(p) => p.$ok && 'border-color: color-mix(in srgb, var(--success) 50%, transparent); color: var(--ok);'}
+  ${(p) => p.$danger && 'border-color: color-mix(in srgb, var(--error) 50%, transparent); color: var(--danger);'}
+`;
+
+const ReviewPill = styled(Pill)`
+  font-size: 1.25rem;
+  padding: 0.45rem 1rem;
+  font-weight: 700;
+  border-width: 2px;
+  ${(p) => p.$state === 'approved' && 'border-color: color-mix(in srgb, var(--success) 55%, transparent); color: var(--ok); background: color-mix(in srgb, var(--success) 16%, var(--gloom));'}
+  ${(p) => p.$state === 'rejected' && 'border-color: color-mix(in srgb, var(--error) 56%, transparent); color: var(--danger); background: color-mix(in srgb, var(--error) 14%, var(--gloom));'}
+  ${(p) => p.$state === 'changes' && 'border-color: color-mix(in srgb, var(--warning) 58%, transparent); color: var(--warning); background: color-mix(in srgb, var(--warning) 18%, var(--gloom));'}
+`;
 
 function createSupabaseClient() {
   const config = window.APP_CONFIG || {};
   if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY || config.SUPABASE_URL.includes('PASTE_')) {
     return null;
   }
-  return supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
+  return createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
 }
 
 function slugFilename(name) {
@@ -23,20 +456,28 @@ function reviewState(post) {
   return 'awaiting';
 }
 
-function reviewStateLabel(state) {
-  if (state === 'ready') return 'Έτοιμο για δημοσίευση';
-  if (state === 'changes') return 'Χρειάζεται αλλαγές';
-  return 'Αναμονή ελέγχου πελάτη';
+function postReviewStatus(post) {
+  const hasNotes = (post.client_notes || '').trim().length > 0;
+  if (post.approval_status === 'disapproved') return 'rejected';
+  if (post.approval_status === 'approved') return 'approved';
+  if (hasNotes) return 'changes';
+  return 'awaiting';
 }
 
-function approvalLabel(status) {
-  if (status === 'approved') return 'Εγκρίθηκε';
-  if (status === 'disapproved') return 'Απορρίφθηκε';
-  return 'Σε αναμονή';
+function postReviewLabel(state) {
+  if (state === 'approved') return 'Εγκρίθηκε';
+  if (state === 'rejected') return 'Απορρίφθηκε';
+  if (state === 'awaiting') return 'Σε αναμονή για έγκριση';
+  return 'Χρειάζεται αλλαγές';
 }
 
 function isVideoFile(file) {
   return file?.type?.startsWith('video/');
+}
+
+function isVideoPost(post) {
+  const value = `${post?.image_url || ''} ${post?.title || ''}`.toLowerCase();
+  return ['.mp4', '.mov', '.webm', '.m4v'].some((ext) => value.includes(ext));
 }
 
 function parseCaptions(text) {
@@ -49,9 +490,7 @@ function parseCaptions(text) {
 
   while (match) {
     const index = Number(match[1]) - 1;
-    if (index >= 0) {
-      byPost[index] = match[2].trim();
-    }
+    if (index >= 0) byPost[index] = match[2].trim();
     match = regex.exec(cleaned);
   }
 
@@ -86,6 +525,9 @@ function AdminApp() {
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [posts, setPosts] = useState([]);
+  const [captionDrafts, setCaptionDrafts] = useState({});
+  const [replacementFiles, setReplacementFiles] = useState({});
+  const [replacementPreviews, setReplacementPreviews] = useState({});
 
   useEffect(() => {
     const supabaseClient = createSupabaseClient();
@@ -111,6 +553,14 @@ function AdminApp() {
     if (!client || !session) return;
     loadPosts();
   }, [client, session]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(replacementPreviews).forEach((url) => {
+        URL.revokeObjectURL(url);
+      });
+    };
+  }, [replacementPreviews]);
 
   async function loadPosts() {
     const { data, error } = await client
@@ -273,15 +723,95 @@ function AdminApp() {
     setBusy(false);
   }
 
-  async function togglePublish(post) {
-    const next = post.status === 'published' ? 'draft' : 'published';
-    const { error } = await client.from('posts').update({ status: next }).eq('id', post.id);
-    if (error) {
-      setStatus(`Σφάλμα ενημέρωσης: ${error.message}`);
+  function handleCaptionDraft(postId, value) {
+    setCaptionDrafts((prev) => ({ ...prev, [postId]: value }));
+  }
+
+  function handleReplacementSelect(post, file) {
+    if (!file) return;
+    const nextPreviewUrl = URL.createObjectURL(file);
+
+    setReplacementPreviews((prev) => {
+      const oldPreviewUrl = prev[post.id];
+      if (oldPreviewUrl) URL.revokeObjectURL(oldPreviewUrl);
+      return { ...prev, [post.id]: nextPreviewUrl };
+    });
+    setReplacementFiles((prev) => ({ ...prev, [post.id]: file }));
+    setStatus(`Επιλέχθηκε νέο αρχείο για το "${post.title}". Πάτησε αποθήκευση αλλαγών.`);
+  }
+
+  async function savePostEdits(post) {
+    if (!client || !session) return;
+    setBusy(true);
+    setStatus(`Αποθήκευση αλλαγών για "${post.title}"...`);
+
+    const bucket = (window.APP_CONFIG && window.APP_CONFIG.STORAGE_BUCKET) || 'post-photos';
+    const selectedFile = replacementFiles[post.id];
+    const nextCaption = captionDrafts[post.id] ?? post.caption;
+    let nextImageUrl = post.image_url;
+    let nextImagePath = post.image_path;
+    let nextTitle = post.title;
+
+    if (selectedFile) {
+      const nextFileName = `${Date.now()}-${slugFilename(selectedFile.name)}`;
+      const nextPath = `${session.user.id}/${nextFileName}`;
+      const { error: uploadError } = await client.storage
+        .from(bucket)
+        .upload(nextPath, selectedFile, { cacheControl: '3600', upsert: false });
+
+      if (uploadError) {
+        setStatus(`Σφάλμα upload (${selectedFile.name}): ${uploadError.message}`);
+        setBusy(false);
+        return;
+      }
+
+      const { data: publicData } = client.storage.from(bucket).getPublicUrl(nextPath);
+      nextImageUrl = publicData.publicUrl;
+      nextImagePath = nextPath;
+      nextTitle = selectedFile.name;
+    }
+
+    const { error: updateError } = await client
+      .from('posts')
+      .update({
+        caption: nextCaption,
+        title: nextTitle,
+        image_url: nextImageUrl,
+        image_path: nextImagePath
+      })
+      .eq('id', post.id);
+
+    if (updateError) {
+      setStatus(`Σφάλμα αποθήκευσης: ${updateError.message}`);
+      setBusy(false);
       return;
     }
-    setStatus(`Ανάρτηση ${post.title} -> ${next === 'published' ? 'δημοσιευμένη' : 'πρόχειρη'}`);
+
+    if (selectedFile && post.image_path && post.image_path !== nextImagePath) {
+      await client.storage.from(bucket).remove([post.image_path]);
+    }
+
+    setCaptionDrafts((prev) => {
+      const next = { ...prev };
+      delete next[post.id];
+      return next;
+    });
+    setReplacementFiles((prev) => {
+      const next = { ...prev };
+      delete next[post.id];
+      return next;
+    });
+    setReplacementPreviews((prev) => {
+      const oldPreviewUrl = prev[post.id];
+      if (oldPreviewUrl) URL.revokeObjectURL(oldPreviewUrl);
+      const next = { ...prev };
+      delete next[post.id];
+      return next;
+    });
+
+    setStatus(`Οι αλλαγές για "${nextTitle}" αποθηκεύτηκαν.`);
     await loadPosts();
+    setBusy(false);
   }
 
   async function deletePostPermanently(post) {
@@ -372,208 +902,262 @@ function AdminApp() {
 
   if (configError) {
     return (
-      <main className="page">
-        <section className="hero">
-          <p className="state state--error">{configError}</p>
-        </section>
-      </main>
+      <>
+        <AppStyle />
+        <Page>
+          <Hero>
+            <State $error>{configError}</State>
+          </Hero>
+        </Page>
+      </>
     );
   }
 
   if (!session) {
     return (
-      <main className="page">
-        <section className="hero reveal">
-          <p className="eyebrow">ΣΥΝΔΕΣΗ ΔΙΑΧΕΙΡΙΣΗΣ</p>
-          <h1>Gym Way Διαχείριση Περιεχομένου</h1>
-          <p className="subtitle">Συνδέσου για ανέβασμα αρχείων και διαχείριση εγκρίσεων.</p>
+      <>
+        <AppStyle />
+        <Page>
+          <Hero>
+            <Eyebrow>ΣΥΝΔΕΣΗ ΔΙΑΧΕΙΡΙΣΗΣ</Eyebrow>
+            <Title>Gym Way Διαχείριση Περιεχομένου</Title>
+            <Subtitle>Συνδέσου για ανέβασμα αρχείων και διαχείριση εγκρίσεων.</Subtitle>
 
-          <form className="admin-form" onSubmit={handleSignIn}>
-            <label>
-              Ηλεκτρονικό ταχυδρομείο
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            </label>
-            <label>
-              Κωδικός
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            </label>
-            <button type="submit" disabled={busy}>{busy ? 'Περίμενε...' : 'Σύνδεση'}</button>
-          </form>
+            <Form onSubmit={handleSignIn}>
+              <label>
+                Ηλεκτρονικό ταχυδρομείο
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              </label>
+              <label>
+                Κωδικός
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              </label>
+              <ActionButton type="submit" $type="primary" disabled={busy}>
+                {busy ? '⏳ Περίμενε...' : '→ Σύνδεση'}
+              </ActionButton>
+            </Form>
 
-          {status && <p className="state">{status}</p>}
-          <p className="caption-source"><a href="./index.html">Μετάβαση στην προεπισκόπηση πελάτη</a></p>
-        </section>
-      </main>
+            {status && <State>{status}</State>}
+            <CaptionSource><a href="./index.html">Μετάβαση στην προεπισκόπηση πελάτη</a></CaptionSource>
+          </Hero>
+        </Page>
+      </>
     );
   }
 
   return (
-    <main className="page">
-      <section className="hero reveal">
-        <p className="eyebrow">ΠΙΝΑΚΑΣ ΔΙΑΧΕΙΡΙΣΗΣ</p>
-        <h1>Ανέβασμα Περιεχομένου σε 3 Βήματα</h1>
-        <p className="subtitle">Ρίξε αρχεία, βάλε την τελική σειρά του προφίλ, κλείδωσέ τη και μετά κάνε επικόλληση όλων των λεζαντών σε ένα κείμενο.</p>
+    <>
+      <AppStyle />
+      <Page>
+        <Hero>
+          <Eyebrow>ΠΙΝΑΚΑΣ ΔΙΑΧΕΙΡΙΣΗΣ</Eyebrow>
+          <Title>Ανέβασμα Περιεχομένου σε 3 Βήματα</Title>
+          <Subtitle>Ρίξε αρχεία, βάλε την τελική σειρά του προφίλ, κλείδωσέ τη και μετά κάνε επικόλληση όλων των λεζαντών σε ένα κείμενο.</Subtitle>
 
-        <form className="admin-form" onSubmit={handleUpload}>
-          <section className="admin-step">
-            <h2>Βήμα 1. Σύρε και άφησε όλα τα αρχεία πολυμέσων</h2>
-            <div
-              className={`dropzone ${dragActive ? 'dropzone--active' : ''} ${orderLocked ? 'dropzone--locked' : ''}`}
-              onDragOver={(event) => {
-                event.preventDefault();
-                if (!orderLocked) setDragActive(true);
-              }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={(event) => {
-                event.preventDefault();
-                setDragActive(false);
-                appendFiles(event.dataTransfer.files);
-              }}
-            >
-              <p>Ρίξε εικόνες/βίντεο εδώ</p>
-              <label className="secondary-link file-picker">
-                Επιλογή αρχείων
-                <input
-                  type="file"
-                  accept="image/*,video/*"
-                  multiple
-                  disabled={orderLocked}
-                  onChange={(event) => {
-                    appendFiles(event.target.files || []);
-                    event.target.value = '';
-                  }}
+          <Form onSubmit={handleUpload}>
+            <Step>
+              <StepTitle>Βήμα 1. Σύρε και άφησε όλα τα αρχεία πολυμέσων</StepTitle>
+              <Dropzone
+                $active={dragActive}
+                $locked={orderLocked}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  if (!orderLocked) setDragActive(true);
+                }}
+                onDragLeave={() => setDragActive(false)}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDragActive(false);
+                  appendFiles(event.dataTransfer.files);
+                }}
+              >
+                <DropText>Ρίξε εικόνες/βίντεο εδώ</DropText>
+                <FilePicker>
+                  <FilePickerButton>＋ Επιλογή αρχείων</FilePickerButton>
+                  <FileInput
+                    type="file"
+                    accept="image/*,video/*"
+                    multiple
+                    disabled={orderLocked}
+                    onChange={(event) => {
+                      appendFiles(event.target.files || []);
+                      event.target.value = '';
+                    }}
+                  />
+                </FilePicker>
+                <MutedSmall>{orderLocked ? 'Η σειρά είναι κλειδωμένη. Ξεκλείδωσε για αλλαγές.' : 'Μπορείς να προσθέτεις αρχεία με πολλαπλά drop.'}</MutedSmall>
+              </Dropzone>
+            </Step>
+
+            <Step>
+              <StepTitle>Βήμα 2. Ορισμός σειράς αναρτήσεων και κλείδωμα τελικής θέσης</StepTitle>
+              {mediaItems.length === 0 ? (
+                <State>Δεν υπάρχουν αρχεία ακόμα.</State>
+              ) : (
+                <>
+                  <MediaGrid>
+                    {mediaItems.map((item, index) => (
+                      <MediaTile
+                        key={item.id}
+                        draggable={!orderLocked}
+                        onDragStart={() => setDraggedId(item.id)}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={() => handleTileDrop(item.id)}
+                      >
+                        <MediaIndex>Ανάρτηση {index + 1}</MediaIndex>
+                        <MediaThumb>
+                          {item.kind === 'video' ? (
+                            <video src={item.previewUrl} muted playsInline preload="metadata" />
+                          ) : (
+                            <img src={item.previewUrl} alt={item.file.name} loading="lazy" />
+                          )}
+                        </MediaThumb>
+                        <MediaName>{item.file.name}</MediaName>
+                        {!orderLocked && (
+                          <ActionButton type="button" $type="danger" onClick={() => removeMedia(item.id)}>
+                            ✕ Αφαίρεση
+                          </ActionButton>
+                        )}
+                      </MediaTile>
+                    ))}
+                  </MediaGrid>
+
+                  <Actions>
+                    {!orderLocked ? (
+                      <ActionButton type="button" $type="primary" onClick={() => setOrderLocked(true)}>
+                        ✓ Κλείδωμα τελικής σειράς
+                      </ActionButton>
+                    ) : (
+                      <ActionButton type="button" onClick={() => setOrderLocked(false)}>
+                        ↺ Ξεκλείδωμα σειράς
+                      </ActionButton>
+                    )}
+                    <ActionButton type="button" $type="danger" onClick={clearMedia} disabled={orderLocked}>
+                      🗑 Καθαρισμός αρχείων
+                    </ActionButton>
+                  </Actions>
+                </>
+              )}
+            </Step>
+
+            <Step>
+              <StepTitle>Βήμα 3. Επικόλληση όλων των λεζαντών σε ένα κείμενο</StepTitle>
+              <label>
+                Πεδίο λεζαντών
+                <Textarea_
+                  rows="8"
+                  value={captionsText}
+                  onChange={(event) => setCaptionsText(event.target.value)}
+                  placeholder={'Post 1: Πρώτη λεζάντα\n\nPost 2: Δεύτερη λεζάντα\n\nPost 3: Τρίτη λεζάντα'}
                 />
               </label>
-              <small>{orderLocked ? 'Η σειρά είναι κλειδωμένη. Ξεκλείδωσε για αλλαγές.' : 'Μπορείς να προσθέτεις αρχεία με πολλαπλά drop.'}</small>
-            </div>
-          </section>
+              <State>Αντιστοιχισμένες λεζάντες: {mappedCaptions}/{mediaItems.length}</State>
+            </Step>
 
-          <section className="admin-step">
-            <h2>Βήμα 2. Ορισμός σειράς αναρτήσεων και κλείδωμα τελικής θέσης</h2>
-            {mediaItems.length === 0 ? (
-              <p className="state">Δεν υπάρχουν αρχεία ακόμα.</p>
-            ) : (
-              <>
-                <div className="media-grid">
-                  {mediaItems.map((item, index) => (
-                    <article
-                      key={item.id}
-                      className="media-tile"
-                      draggable={!orderLocked}
-                      onDragStart={() => setDraggedId(item.id)}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={() => handleTileDrop(item.id)}
-                    >
-                      <span className="media-index">Ανάρτηση {index + 1}</span>
-                      <div className="media-thumb">
-                        {item.kind === 'video' ? (
-                          <video src={item.previewUrl} muted playsInline preload="metadata" />
-                        ) : (
-                          <img src={item.previewUrl} alt={item.file.name} loading="lazy" />
-                        )}
-                      </div>
-                      <p>{item.file.name}</p>
-                      {!orderLocked && (
-                        <button type="button" className="secondary" onClick={() => removeMedia(item.id)}>Αφαίρεση</button>
+            <Actions>
+              <ActionButton type="submit" $type="primary" disabled={busy}>
+                {busy ? '⏳ Γίνεται ανέβασμα...' : '⬆ Ανέβασμα + Δημοσίευση τελικής σειράς'}
+              </ActionButton>
+              <ActionButton type="button" onClick={handleSignOut}>⇢ Αποσύνδεση</ActionButton>
+              <ActionButton type="button" onClick={() => { window.location.href = './index.html'; }}>
+                👁 Άνοιγμα προεπισκόπησης πελάτη
+              </ActionButton>
+            </Actions>
+          </Form>
+
+          {status && <State>{status}</State>}
+        </Hero>
+
+        <List>
+          <ListHeader>
+            <ListTitle>Όλες οι Αναρτήσεις</ListTitle>
+            <ActionButton type="button" $type="danger" onClick={deleteAllPostsPermanently} disabled={busy || posts.length === 0}>
+              🗑 Οριστική διαγραφή όλων
+            </ActionButton>
+          </ListHeader>
+
+          <Overview>
+            <OverviewCard $type="changes">
+              <OverviewLabel>Χρειάζονται αλλαγές</OverviewLabel>
+              <OverviewValue>{approvalOverview.changes}</OverviewValue>
+            </OverviewCard>
+            <OverviewCard $type="ready">
+              <OverviewLabel>Έτοιμα για δημοσίευση</OverviewLabel>
+              <OverviewValue>{approvalOverview.ready}</OverviewValue>
+            </OverviewCard>
+            <OverviewCard>
+              <OverviewLabel>Αναμονή ελέγχου</OverviewLabel>
+              <OverviewValue>{approvalOverview.awaiting}</OverviewValue>
+            </OverviewCard>
+          </Overview>
+
+          {posts.length === 0 ? (
+            <State>Δεν υπάρχουν αναρτήσεις ακόμα.</State>
+          ) : (
+            posts.map((post) => (
+              <Row key={post.id}>
+                <RowMain>
+                  <RowHead>
+                    <RowThumb>
+                      {replacementFiles[post.id] && isVideoFile(replacementFiles[post.id]) ? (
+                        <video src={replacementPreviews[post.id]} muted playsInline preload="metadata" />
+                      ) : replacementFiles[post.id] ? (
+                        <img src={replacementPreviews[post.id]} alt={replacementFiles[post.id].name} loading="lazy" />
+                      ) : isVideoPost(post) ? (
+                        <video src={replacementPreviews[post.id] || post.image_url} muted playsInline preload="metadata" />
+                      ) : (
+                        <img src={replacementPreviews[post.id] || post.image_url} alt={post.title} loading="lazy" />
                       )}
-                    </article>
-                  ))}
-                </div>
+                    </RowThumb>
+                    <RowHeadText>
+                      <strong>{post.title}</strong>
+                      <MutedSmall>{formatDate(post.created_at)}</MutedSmall>
+                    </RowHeadText>
+                  </RowHead>
 
-                <div className="admin-actions">
-                  {!orderLocked ? (
-                    <button type="button" onClick={() => setOrderLocked(true)}>Κλείδωμα τελικής σειράς</button>
-                  ) : (
-                    <button type="button" className="secondary" onClick={() => setOrderLocked(false)}>Ξεκλείδωμα σειράς</button>
-                  )}
-                  <button type="button" className="secondary" onClick={clearMedia} disabled={orderLocked}>Καθαρισμός αρχείων</button>
-                </div>
-              </>
-            )}
-          </section>
+                  <EditLabel>Λεζάντα</EditLabel>
+                  <InlineCaption
+                    rows="3"
+                    value={captionDrafts[post.id] ?? post.caption}
+                    onChange={(event) => handleCaptionDraft(post.id, event.target.value)}
+                  />
 
-          <section className="admin-step">
-            <h2>Βήμα 3. Επικόλληση όλων των λεζαντών σε ένα κείμενο</h2>
-            <label>
-              Πεδίο λεζαντών
-              <textarea
-                rows="8"
-                value={captionsText}
-                onChange={(event) => setCaptionsText(event.target.value)}
-                placeholder={"Post 1: Πρώτη λεζάντα\n\nPost 2: Δεύτερη λεζάντα\n\nPost 3: Τρίτη λεζάντα"}
-              />
-            </label>
-            <p className="state">Αντιστοιχισμένες λεζάντες: {mappedCaptions}/{mediaItems.length}</p>
-          </section>
+                  <EditActions>
+                    <MediaUploadLabel htmlFor={`replace-${post.id}`}>
+                      ↻ Αντικατάσταση media
+                    </MediaUploadLabel>
+                    <HiddenFileInput
+                      id={`replace-${post.id}`}
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={(event) => {
+                        const file = (event.target.files || [])[0];
+                        handleReplacementSelect(post, file);
+                        event.target.value = '';
+                      }}
+                    />
+                    <ActionButton type="button" $type="primary" disabled={busy} onClick={() => savePostEdits(post)}>
+                      💾 Αποθήκευση αλλαγών
+                    </ActionButton>
+                  </EditActions>
 
-          <div className="admin-actions">
-            <button type="submit" disabled={busy}>{busy ? 'Γίνεται ανέβασμα...' : 'Ανέβασμα + Δημοσίευση τελικής σειράς'}</button>
-            <button type="button" className="secondary" onClick={handleSignOut}>Αποσύνδεση</button>
-            <a href="./index.html" className="secondary-link">Άνοιγμα προεπισκόπησης πελάτη</a>
-          </div>
-        </form>
-
-        {status && <p className="state">{status}</p>}
-      </section>
-
-      <section className="admin-list reveal">
-        <div className="admin-list__header">
-          <h2>Όλες οι Αναρτήσεις</h2>
-          <button type="button" className="danger" onClick={deleteAllPostsPermanently} disabled={busy || posts.length === 0}>
-            Οριστική διαγραφή όλων
-          </button>
-        </div>
-        <div className="approval-overview">
-          <article className="overview-card overview-card--changes">
-            <span>Χρειάζονται αλλαγές</span>
-            <strong>{approvalOverview.changes}</strong>
-            {approvalOverview.changes > 0 && <em className="overview-dot" aria-hidden="true"></em>}
-          </article>
-          <article className="overview-card overview-card--ready">
-            <span>Έτοιμα για δημοσίευση</span>
-            <strong>{approvalOverview.ready}</strong>
-            {approvalOverview.ready > 0 && <em className="overview-dot overview-dot--ok" aria-hidden="true"></em>}
-          </article>
-          <article className="overview-card overview-card--awaiting">
-            <span>Αναμονή ελέγχου</span>
-            <strong>{approvalOverview.awaiting}</strong>
-            {approvalOverview.awaiting > 0 && <em className="overview-dot overview-dot--idle" aria-hidden="true"></em>}
-          </article>
-        </div>
-        {posts.length === 0 ? (
-          <p className="state">Δεν υπάρχουν αναρτήσεις ακόμα.</p>
-        ) : (
-          posts.map((post) => (
-            <article className={`admin-row admin-row--${reviewState(post)}`} key={post.id}>
-              <div>
-                <strong>{post.title}</strong>
-                <p>{post.caption}</p>
-                <p><strong>Σημειώσεις πελάτη:</strong> {(post.client_notes || '').trim() || 'Δεν υπάρχουν σημειώσεις ακόμα.'}</p>
-                <small>{formatDate(post.created_at)}</small>
-              </div>
-              <div className="admin-row__actions">
-                <span className={post.status === 'published' ? 'pill pill--ok' : 'pill'}>
-                  {post.status === 'published' ? 'Δημοσιευμένο' : 'Πρόχειρο'}
-                </span>
-                <span className={post.approval_status === 'approved' ? 'pill pill--ok' : post.approval_status === 'disapproved' ? 'pill pill--danger' : 'pill'}>
-                  {approvalLabel(post.approval_status)}
-                </span>
-                <span className={reviewState(post) === 'ready' ? 'pill pill--ok' : reviewState(post) === 'changes' ? 'pill pill--danger' : 'pill'}>
-                  {reviewStateLabel(reviewState(post))}
-                </span>
-                <button type="button" className="secondary" onClick={() => togglePublish(post)}>
-                  {post.status === 'published' ? 'Απόσυρση' : 'Δημοσίευση'}
-                </button>
-                <button type="button" className="danger" onClick={() => deletePostPermanently(post)} disabled={busy}>
-                  Οριστική διαγραφή
-                </button>
-              </div>
-            </article>
-          ))
-        )}
-      </section>
-    </main>
+                  <RowText><strong>Σημειώσεις πελάτη:</strong> {(post.client_notes || '').trim() || 'Δεν υπάρχουν σημειώσεις ακόμα.'}</RowText>
+                </RowMain>
+                <RowActions>
+                  <ReviewPill $state={postReviewStatus(post)}>
+                    {postReviewLabel(postReviewStatus(post))}
+                  </ReviewPill>
+                  <ActionButton type="button" $type="danger" onClick={() => deletePostPermanently(post)} disabled={busy}>
+                    ✕ Οριστική διαγραφή
+                  </ActionButton>
+                </RowActions>
+              </Row>
+            ))
+          )}
+        </List>
+      </Page>
+    </>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<AdminApp />);
+createRoot(document.getElementById('root')).render(<AdminApp />);
