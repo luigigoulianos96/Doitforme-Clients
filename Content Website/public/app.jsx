@@ -829,8 +829,7 @@ function App() {
           <OrbLeft />
           <OrbRight />
 
-          <Title>Gym Way Ροή Εγκρίσεων</Title>
-          {clientMeta && <Subtitle>Client: {clientMeta.name}</Subtitle>}
+          <Title>{clientMeta?.name ? `${clientMeta.name} Ροή Εγκρίσεων` : 'Ροή Εγκρίσεων'}</Title>
           <Subtitle>
             Αυτή η σελίδα προορίζεται μόνο για τον πελάτη.
             Χρησιμοποιείται για σημειώσεις και εγκρίσεις αναρτήσεων.
