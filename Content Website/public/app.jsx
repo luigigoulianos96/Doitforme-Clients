@@ -376,6 +376,16 @@ const DecisionRow = styled.div`
   gap: 0.45rem;
 `;
 
+const DecisionNotice = styled.p`
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 28%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--white) 97%, transparent);
+  color: color-mix(in srgb, var(--dark) 82%, var(--greyDark));
+  padding: 0.45rem 0.62rem;
+  font-size: 14px;
+`;
+
 const DecisionButton = styled.button`
   flex: 1;
   border: 1px solid color-mix(in srgb, var(--greyDark) 30%, transparent);
@@ -540,9 +550,21 @@ function PostCard({ post, index, onUpdateReview, pending, historyEntries, onAppe
   const [notes, setNotes] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true);
+  const [decisionLocked, setDecisionLocked] = useState(post.approval_status !== 'pending');
+  const [decisionNotice, setDecisionNotice] = useState('');
 
   const trimmedNotes = notes.trim();
   const noteMissing = trimmedNotes.length === 0;
+
+  useEffect(() => {
+    setDecisionLocked(post.approval_status !== 'pending');
+  }, [post.approval_status]);
+
+  useEffect(() => {
+    if (!decisionNotice) return;
+    const timer = window.setTimeout(() => setDecisionNotice(''), 2200);
+    return () => window.clearTimeout(timer);
+  }, [decisionNotice]);
 
   async function handleSaveNotes() {
     if (noteMissing) return;
@@ -566,6 +588,8 @@ function PostCard({ post, index, onUpdateReview, pending, historyEntries, onAppe
       nextStatus === 'approved' ? 'Έγκριση' : 'Απόρριψη'
     );
     setNotes('');
+    setDecisionLocked(true);
+    setDecisionNotice(nextStatus === 'approved' ? 'Εγκρίνατε τη δημοσίευση.' : 'Απορρίψατε τη δημοσίευση.');
   }
 
   return (
@@ -641,13 +665,23 @@ function PostCard({ post, index, onUpdateReview, pending, historyEntries, onAppe
             </>
           )}
           <DecisionRow>
-            <DecisionButton type="button" $type="approve" onClick={() => handleDecision('approved')} disabled={pending}>
-              ✓ Έγκριση
-            </DecisionButton>
-            <DecisionButton type="button" $type="decline" onClick={() => handleDecision('disapproved')} disabled={pending}>
-              ✕ Απόρριψη
-            </DecisionButton>
+            {!decisionLocked && (
+              <DecisionButton type="button" $type="approve" onClick={() => handleDecision('approved')} disabled={pending}>
+                ✓ Έγκριση
+              </DecisionButton>
+            )}
+            {!decisionLocked && (
+              <DecisionButton type="button" $type="decline" onClick={() => handleDecision('disapproved')} disabled={pending}>
+                ✕ Απόρριψη
+              </DecisionButton>
+            )}
+            {decisionLocked && (
+              <DecisionButton type="button" onClick={() => setDecisionLocked(false)} disabled={pending}>
+                Αλλαγή Απόφασης
+              </DecisionButton>
+            )}
           </DecisionRow>
+          {decisionNotice && <DecisionNotice>{decisionNotice}</DecisionNotice>}
         </ReviewBox>
       </ReviewSection>
       {pending && (

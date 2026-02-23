@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import styled, { createGlobalStyle } from 'styled-components';
-import { Textarea_ } from 'monica-alexandria';
 
 const AppStyle = createGlobalStyle`
   :root {
@@ -57,6 +56,12 @@ const Hero = styled.section`
   backdrop-filter: blur(10px);
   box-shadow: var(--shadow);
   padding: clamp(1.4rem, 4vw, 3rem);
+`;
+
+const HeroTop = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.7rem;
 `;
 
 const Eyebrow = styled.p`
@@ -114,6 +119,27 @@ const StepTitle = styled.h2`
   margin: 0 0 0.64rem;
   font-family: 'Syne', sans-serif;
   font-size: 2rem;
+`;
+
+const CaptionInput = styled.textarea`
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 36%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--gloom) 92%, transparent);
+  color: var(--text);
+  font: inherit;
+  padding: 1rem 1.1rem;
+  min-height: 14rem;
+  resize: vertical;
+
+  &::placeholder {
+    opacity: 1;
+    transition: opacity 0.18s ease;
+  }
+
+  &:focus::placeholder {
+    opacity: 0;
+  }
 `;
 
 const Dropzone = styled.div`
@@ -177,6 +203,11 @@ const MediaTile = styled.article`
   padding: 0.55rem;
   display: grid;
   gap: 0.42rem;
+  cursor: ${(p) => (p.$draggable ? 'grab' : 'default')};
+
+  &:active {
+    cursor: ${(p) => (p.$draggable ? 'grabbing' : 'default')};
+  }
 `;
 
 const MediaIndex = styled.span`
@@ -525,6 +556,7 @@ function AdminApp() {
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [posts, setPosts] = useState([]);
+  const [copyState, setCopyState] = useState('');
   const [captionDrafts, setCaptionDrafts] = useState({});
   const [replacementFiles, setReplacementFiles] = useState({});
   const [replacementPreviews, setReplacementPreviews] = useState({});
@@ -670,6 +702,8 @@ function AdminApp() {
     }
 
     const captions = parseCaptions(captionsText);
+    const highestSortOrder = posts.reduce((max, post) => Math.max(max, post.sort_order || 0), 0);
+    const nextSortOrderStart = highestSortOrder + 1;
     setBusy(true);
     setStatus('Γίνεται ανέβασμα και δημιουργία αναρτήσεων...');
 
@@ -697,13 +731,13 @@ function AdminApp() {
         title: file.name,
         image_url: publicData.publicUrl,
         image_path: path,
-        caption: captions[i] || `Post ${i + 1}: Η λεζάντα εκκρεμεί.`,
+        caption: captions[i] || `Post ${nextSortOrderStart + i}: Η λεζάντα εκκρεμεί.`,
         status: 'published',
         approval_status: 'pending',
         client_notes: '',
         username: 'gymway.official',
         like_count: 160 + i * 20,
-        sort_order: i + 1
+        sort_order: nextSortOrderStart + i
       };
 
       const { error: insertError } = await client.from('posts').insert(payload);
@@ -721,6 +755,20 @@ function AdminApp() {
     setStatus(`Ολοκληρώθηκε. Ανέβηκαν ${mediaItems.length} αναρτήσεις με τη κλειδωμένη σειρά.`);
     await loadPosts();
     setBusy(false);
+  }
+
+  function openClientPreviewTab() {
+    window.open('./index.html', '_blank', 'noopener,noreferrer');
+  }
+
+  async function copyClientShareLink() {
+    const shareUrl = `${window.location.origin}/public/index.html`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopyState('Το share link αντιγράφηκε.');
+    } catch (_error) {
+      setCopyState('Δεν έγινε αντιγραφή του share link.');
+    }
   }
 
   function handleCaptionDraft(postId, value) {
@@ -899,6 +947,7 @@ function AdminApp() {
       ),
     [posts]
   );
+  const hasPublishedPosts = posts.length > 0;
 
   if (configError) {
     return (
@@ -950,6 +999,9 @@ function AdminApp() {
       <AppStyle />
       <Page>
         <Hero>
+          <HeroTop>
+            <ActionButton type="button" onClick={handleSignOut}>⇢ Αποσύνδεση</ActionButton>
+          </HeroTop>
           <Eyebrow>ΠΙΝΑΚΑΣ ΔΙΑΧΕΙΡΙΣΗΣ</Eyebrow>
           <Title>Ανέβασμα Περιεχομένου σε 3 Βήματα</Title>
           <Subtitle>Ρίξε αρχεία, βάλε την τελική σειρά του προφίλ, κλείδωσέ τη και μετά κάνε επικόλληση όλων των λεζαντών σε ένα κείμενο.</Subtitle>
@@ -999,6 +1051,7 @@ function AdminApp() {
                     {mediaItems.map((item, index) => (
                       <MediaTile
                         key={item.id}
+                        $draggable={!orderLocked}
                         draggable={!orderLocked}
                         onDragStart={() => setDraggedId(item.id)}
                         onDragOver={(event) => event.preventDefault()}
@@ -1044,7 +1097,7 @@ function AdminApp() {
               <StepTitle>Βήμα 3. Επικόλληση όλων των λεζαντών σε ένα κείμενο</StepTitle>
               <label>
                 Πεδίο λεζαντών
-                <Textarea_
+                <CaptionInput
                   rows="8"
                   value={captionsText}
                   onChange={(event) => setCaptionsText(event.target.value)}
@@ -1058,14 +1111,18 @@ function AdminApp() {
               <ActionButton type="submit" $type="primary" disabled={busy}>
                 {busy ? '⏳ Γίνεται ανέβασμα...' : '⬆ Ανέβασμα + Δημοσίευση τελικής σειράς'}
               </ActionButton>
-              <ActionButton type="button" onClick={handleSignOut}>⇢ Αποσύνδεση</ActionButton>
-              <ActionButton type="button" onClick={() => { window.location.href = './index.html'; }}>
+              <ActionButton type="button" disabled={!hasPublishedPosts} onClick={openClientPreviewTab}>
                 👁 Άνοιγμα προεπισκόπησης πελάτη
+              </ActionButton>
+              <ActionButton type="button" disabled={!hasPublishedPosts} onClick={copyClientShareLink}>
+                ⧉ Αντιγραφή share link
               </ActionButton>
             </Actions>
           </Form>
 
           {status && <State>{status}</State>}
+          {!hasPublishedPosts && <State>Η προεπισκόπηση ενεργοποιείται μετά το πρώτο ολοκληρωμένο upload.</State>}
+          {copyState && <State>{copyState}</State>}
         </Hero>
 
         <List>
