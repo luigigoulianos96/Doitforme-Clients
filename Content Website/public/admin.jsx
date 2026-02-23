@@ -714,8 +714,12 @@ function AdminApp() {
 
   async function handleSignOut() {
     if (!client) return;
-    await client.auth.signOut();
-    setStatus('Έγινε αποσύνδεση.');
+    const { error } = await client.auth.signOut();
+    setSession(null);
+    setSelectedClient(null);
+    setPosts([]);
+    setStatus(error ? `Σφάλμα αποσύνδεσης: ${error.message}` : 'Έγινε αποσύνδεση.');
+    window.location.href = './portal.html';
   }
 
   async function handleUpload(event) {

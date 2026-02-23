@@ -268,11 +268,19 @@ function PortalApp() {
 
   async function handleSignOut() {
     if (!client) return;
-    await client.auth.signOut();
-    setStatus('Έγινε αποσύνδεση.');
+    const { error } = await client.auth.signOut();
+    setSession(null);
+    setClients([]);
+    setPosts([]);
+    setStatus(error ? `Σφάλμα αποσύνδεσης: ${error.message}` : 'Έγινε αποσύνδεση.');
   }
 
   async function createClientFeed() {
+    if (!session) {
+      setStatus('Δεν υπάρχει ενεργό session. Κάνε login ξανά.');
+      return;
+    }
+
     if (!clientNameInput.trim()) {
       setStatus('Γράψε όνομα client.');
       return;
@@ -302,7 +310,10 @@ function PortalApp() {
   }
 
   async function deleteClientFeed(feedClient) {
-    if (!client || !feedClient) return;
+    if (!client || !feedClient || !session) {
+      setStatus('Δεν υπάρχει ενεργό session. Κάνε login ξανά.');
+      return;
+    }
 
     const confirmDelete = window.confirm(`Είσαι σίγουρος ότι θέλεις να διαγράψεις τον πελάτη "${feedClient.name}"; Θα διαγραφούν όλα τα δεδομένα και τα αρχεία του.`);
     if (!confirmDelete) return;
