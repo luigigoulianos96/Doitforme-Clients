@@ -482,6 +482,11 @@ function createSupabaseClient() {
   return supabaseClientCache;
 }
 
+function getClientSlugFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('client') || '';
+}
+
 function isVideoPost(post) {
   const value = `${post?.image_url || ''} ${post?.title || ''}`.toLowerCase();
   return ['.mp4', '.mov', '.webm', '.m4v'].some((ext) => value.includes(ext));
@@ -504,9 +509,9 @@ function formatHistoryDateTime(iso) {
   });
 }
 
-function readNotesHistory() {
+function readNotesHistory(storageKey) {
   try {
-    const raw = window.localStorage.getItem(NOTES_HISTORY_KEY);
+    const raw = window.localStorage.getItem(storageKey);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === 'object' ? parsed : {};
@@ -515,9 +520,9 @@ function readNotesHistory() {
   }
 }
 
-function writeNotesHistory(value) {
+function writeNotesHistory(storageKey, value) {
   try {
-    window.localStorage.setItem(NOTES_HISTORY_KEY, JSON.stringify(value));
+    window.localStorage.setItem(storageKey, JSON.stringify(value));
   } catch {
     // Best effort only.
   }
@@ -576,9 +581,10 @@ function PostCard({ post, index, onUpdateReview, pending, historyEntries, onAppe
   }
 
   async function handleDecision(nextStatus) {
+    const clientNotesValue = nextStatus === 'approved' ? '' : trimmedNotes;
     const ok = await onUpdateReview(
       post.id,
-      { approval_status: nextStatus, client_notes: trimmedNotes },
+      { approval_status: nextStatus, client_notes: clientNotesValue },
       nextStatus === 'approved' ? 'Η ανάρτηση εγκρίθηκε.' : 'Η ανάρτηση απορρίφθηκε.'
     );
     if (!ok) return;
@@ -695,13 +701,16 @@ function PostCard({ post, index, onUpdateReview, pending, historyEntries, onAppe
 
 function App() {
   const [posts, setPosts] = useState([]);
+  const [clientMeta, setClientMeta] = useState(null);
+  const [clientSlug] = useState(getClientSlugFromUrl());
   const [status, setStatus] = useState({ loading: true, error: '', message: '' });
   const [savingId, setSavingId] = useState(null);
   const [notesHistoryByPost, setNotesHistoryByPost] = useState({});
+  const notesStorageKey = `${NOTES_HISTORY_KEY}_${clientSlug || 'default'}`;
 
   useEffect(() => {
-    setNotesHistoryByPost(readNotesHistory());
-  }, []);
+    setNotesHistoryByPost(readNotesHistory(notesStorageKey));
+  }, [notesStorageKey]);
 
   useEffect(() => {
     const client = createSupabaseClient();
@@ -710,21 +719,41 @@ function App() {
       return;
     }
 
+    if (!clientSlug) {
+      setStatus({ loading: false, error: 'Λείπει client link. Χρησιμοποίησε το preview link από το portal.', message: '' });
+      return;
+    }
+
     client
-      .from('posts')
-      .select('id,title,caption,image_url,created_at,username,status,sort_order,approval_status,client_notes')
-      .eq('status', 'published')
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) {
-          setStatus({ loading: false, error: error.message, message: '' });
+      .from('clients')
+      .select('id,name,slug')
+      .eq('slug', clientSlug)
+      .single()
+      .then(({ data: clientData, error: clientError }) => {
+        if (clientError) {
+          setStatus({ loading: false, error: 'Το client link δεν είναι έγκυρο.', message: '' });
           return;
         }
-        setPosts(data || []);
-        setStatus({ loading: false, error: '', message: '' });
+
+        setClientMeta(clientData);
+
+        client
+          .from('posts')
+          .select('id,title,caption,image_url,created_at,username,status,sort_order,approval_status,client_notes,client_id')
+          .eq('status', 'published')
+          .eq('client_id', clientData.id)
+          .order('sort_order', { ascending: true })
+          .order('created_at', { ascending: false })
+          .then(({ data, error }) => {
+            if (error) {
+              setStatus({ loading: false, error: error.message, message: '' });
+              return;
+            }
+            setPosts(data || []);
+            setStatus({ loading: false, error: '', message: '' });
+          });
       });
-  }, []);
+  }, [clientSlug]);
 
   async function updateReview(postId, changes, successMessage) {
     const client = createSupabaseClient();
@@ -774,7 +803,7 @@ function App() {
         ...prev,
         [postId]: [entry, ...(prev[postId] || [])]
       };
-      writeNotesHistory(next);
+      writeNotesHistory(notesStorageKey, next);
       return next;
     });
   }
@@ -801,6 +830,7 @@ function App() {
           <OrbRight />
 
           <Title>Gym Way Ροή Εγκρίσεων</Title>
+          {clientMeta && <Subtitle>Client: {clientMeta.name}</Subtitle>}
           <Subtitle>
             Αυτή η σελίδα προορίζεται μόνο για τον πελάτη.
             Χρησιμοποιείται για σημειώσεις και εγκρίσεις αναρτήσεων.

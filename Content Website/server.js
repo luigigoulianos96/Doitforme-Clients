@@ -46,14 +46,17 @@ const serve_file = (res, filePath) => {
 // Backend integration: all runtime API communication still goes directly from frontend to Supabase.
 const resolve_local_path = (requestPath) => {
   const pathMap = {
-    '/': '/public/index.html',
+    '/': '/public/portal.html',
+    '/portal': '/public/portal.html',
+    '/portal.html': '/public/portal.html',
     '/index.html': '/public/index.html',
     '/admin.html': '/public/admin.html'
   };
 
   const mappedPath = pathMap[requestPath] || requestPath;
   const normalized = path.normalize(mappedPath).replace(/^([.][./\\])+/, '');
-  return path.join(ROOT_DIR, normalized);
+  const withoutLeadingSlash = normalized.replace(/^[/\\]+/, '');
+  return path.join(ROOT_DIR, withoutLeadingSlash);
 };
 
 const server = http.createServer((req, res) => {
@@ -72,6 +75,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Presentation site live at http://localhost:${PORT}`);
+  console.log(`Portal page: http://localhost:${PORT}/public/portal.html`);
   console.log(`Public page: http://localhost:${PORT}/public/index.html`);
   console.log(`Admin page: http://localhost:${PORT}/public/admin.html`);
 });

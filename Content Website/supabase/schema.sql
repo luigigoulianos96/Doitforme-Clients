@@ -1,5 +1,7 @@
 -- Run this in Supabase SQL editor
 
+create extension if not exists pgcrypto;
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text unique,
@@ -21,14 +23,25 @@ create table if not exists public.posts (
   created_by uuid references auth.users(id)
 );
 
+create table if not exists public.clients (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text not null unique,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id)
+);
+
 alter table public.posts
   add column if not exists approval_status text not null default 'pending' check (approval_status in ('pending', 'approved', 'disapproved')),
-  add column if not exists client_notes text not null default '';
+  add column if not exists client_notes text not null default '',
+  add column if not exists client_id uuid references public.clients(id);
 
 create index if not exists posts_status_sort_idx on public.posts(status, sort_order, created_at desc);
+create index if not exists posts_client_sort_idx on public.posts(client_id, status, sort_order, created_at desc);
 
 alter table public.profiles enable row level security;
 alter table public.posts enable row level security;
+alter table public.clients enable row level security;
 
 -- Public can read only published posts
 drop policy if exists "Public can read published posts" on public.posts;
@@ -51,6 +64,31 @@ with check (status = 'published');
 drop policy if exists "Admin full access posts" on public.posts;
 create policy "Admin full access posts"
 on public.posts
+for all
+using (
+  exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.is_admin = true
+  )
+)
+with check (
+  exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.is_admin = true
+  )
+);
+
+-- Public can read clients to resolve preview links by slug
+drop policy if exists "Public can read clients" on public.clients;
+create policy "Public can read clients"
+on public.clients
+for select
+using (true);
+
+-- Admin can read/write all clients
+drop policy if exists "Admin full access clients" on public.clients;
+create policy "Admin full access clients"
+on public.clients
 for all
 using (
   exists (

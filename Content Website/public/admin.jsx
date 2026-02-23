@@ -61,6 +61,7 @@ const Hero = styled.section`
 const HeroTop = styled.div`
   display: flex;
   justify-content: flex-end;
+  gap: 0.5rem;
   margin-bottom: 0.7rem;
 `;
 
@@ -472,6 +473,11 @@ function createSupabaseClient() {
   return createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
 }
 
+function getClientSlugFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('client') || '';
+}
+
 function slugFilename(name) {
   return name.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
 }
@@ -557,6 +563,8 @@ function AdminApp() {
   const [busy, setBusy] = useState(false);
   const [posts, setPosts] = useState([]);
   const [copyState, setCopyState] = useState('');
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [clientSlug] = useState(getClientSlugFromUrl());
   const [captionDrafts, setCaptionDrafts] = useState({});
   const [replacementFiles, setReplacementFiles] = useState({});
   const [replacementPreviews, setReplacementPreviews] = useState({});
@@ -582,9 +590,14 @@ function AdminApp() {
   }, []);
 
   useEffect(() => {
-    if (!client || !session) return;
+    if (!client || !session || !clientSlug) return;
+    loadSelectedClient();
+  }, [client, session, clientSlug]);
+
+  useEffect(() => {
+    if (!client || !session || !selectedClient) return;
     loadPosts();
-  }, [client, session]);
+  }, [client, session, selectedClient]);
 
   useEffect(() => {
     return () => {
@@ -594,10 +607,28 @@ function AdminApp() {
     };
   }, [replacementPreviews]);
 
+  async function loadSelectedClient() {
+    const { data, error } = await client
+      .from('clients')
+      .select('id,name,slug')
+      .eq('slug', clientSlug)
+      .single();
+
+    if (error) {
+      setStatus(`Client not found για slug "${clientSlug}".`);
+      return;
+    }
+
+    setSelectedClient(data);
+  }
+
   async function loadPosts() {
+    if (!selectedClient) return;
+
     const { data, error } = await client
       .from('posts')
-      .select('id,title,caption,image_url,image_path,status,sort_order,created_at,approval_status,client_notes')
+      .select('id,title,caption,image_url,image_path,status,sort_order,created_at,approval_status,client_notes,client_id')
+      .eq('client_id', selectedClient.id)
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false });
 
@@ -689,7 +720,7 @@ function AdminApp() {
 
   async function handleUpload(event) {
     event.preventDefault();
-    if (!client || !session) return;
+    if (!client || !session || !selectedClient) return;
 
     if (mediaItems.length === 0) {
       setStatus('Βήμα 1: Ρίξε πρώτα τουλάχιστον 1 αρχείο πολυμέσου.');
@@ -732,6 +763,7 @@ function AdminApp() {
         image_url: publicData.publicUrl,
         image_path: path,
         caption: captions[i] || `Post ${nextSortOrderStart + i}: Η λεζάντα εκκρεμεί.`,
+        client_id: selectedClient.id,
         status: 'published',
         approval_status: 'pending',
         client_notes: '',
@@ -758,11 +790,13 @@ function AdminApp() {
   }
 
   function openClientPreviewTab() {
-    window.open('./index.html', '_blank', 'noopener,noreferrer');
+    if (!selectedClient) return;
+    window.open(`./index.html?client=${encodeURIComponent(selectedClient.slug)}`, '_blank', 'noopener,noreferrer');
   }
 
   async function copyClientShareLink() {
-    const shareUrl = `${window.location.origin}/public/index.html`;
+    if (!selectedClient) return;
+    const shareUrl = `${window.location.origin}/public/index.html?client=${encodeURIComponent(selectedClient.slug)}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopyState('Το share link αντιγράφηκε.');
@@ -948,6 +982,7 @@ function AdminApp() {
     [posts]
   );
   const hasPublishedPosts = posts.length > 0;
+  const hasClientSlug = clientSlug.length > 0;
 
   if (configError) {
     return (
@@ -968,26 +1003,34 @@ function AdminApp() {
         <AppStyle />
         <Page>
           <Hero>
-            <Eyebrow>ΣΥΝΔΕΣΗ ΔΙΑΧΕΙΡΙΣΗΣ</Eyebrow>
-            <Title>Gym Way Διαχείριση Περιεχομένου</Title>
-            <Subtitle>Συνδέσου για ανέβασμα αρχείων και διαχείριση εγκρίσεων.</Subtitle>
-
-            <Form onSubmit={handleSignIn}>
-              <label>
-                Ηλεκτρονικό ταχυδρομείο
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-              </label>
-              <label>
-                Κωδικός
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-              </label>
-              <ActionButton type="submit" $type="primary" disabled={busy}>
-                {busy ? '⏳ Περίμενε...' : '→ Σύνδεση'}
+            <Eyebrow>AUTH REQUIRED</Eyebrow>
+            <Title>Σύνδεση μέσω Portal</Title>
+            <Subtitle>Η πρόσβαση στο admin γίνεται μόνο από το Portal: Login -> Portal -> Επιλογή Client -> Admin.</Subtitle>
+            <Actions>
+              <ActionButton type="button" $type="primary" onClick={() => { window.location.href = './portal.html'; }}>
+                Μετάβαση στο Portal Login
               </ActionButton>
-            </Form>
+            </Actions>
+          </Hero>
+        </Page>
+      </>
+    );
+  }
 
-            {status && <State>{status}</State>}
-            <CaptionSource><a href="./index.html">Μετάβαση στην προεπισκόπηση πελάτη</a></CaptionSource>
+  if (!hasClientSlug) {
+    return (
+      <>
+        <AppStyle />
+        <Page>
+          <Hero>
+            <Eyebrow>ΠΙΝΑΚΑΣ ΔΙΑΧΕΙΡΙΣΗΣ</Eyebrow>
+            <Title>Λείπει client scope</Title>
+            <Subtitle>Άνοιξε τον admin από το portal για να φορτώσει συγκεκριμένο client feed.</Subtitle>
+            <Actions>
+              <ActionButton type="button" onClick={() => window.open('./portal.html', '_blank', 'noopener,noreferrer')}>
+                Μετάβαση στο Portal
+              </ActionButton>
+            </Actions>
           </Hero>
         </Page>
       </>
@@ -1000,10 +1043,11 @@ function AdminApp() {
       <Page>
         <Hero>
           <HeroTop>
+            <ActionButton type="button" onClick={() => window.open('./portal.html', '_blank', 'noopener,noreferrer')}>📋 Portal</ActionButton>
             <ActionButton type="button" onClick={handleSignOut}>⇢ Αποσύνδεση</ActionButton>
           </HeroTop>
           <Eyebrow>ΠΙΝΑΚΑΣ ΔΙΑΧΕΙΡΙΣΗΣ</Eyebrow>
-          <Title>Ανέβασμα Περιεχομένου σε 3 Βήματα</Title>
+          <Title>Ανέβασμα Περιεχομένου: {selectedClient?.name || 'Client'}</Title>
           <Subtitle>Ρίξε αρχεία, βάλε την τελική σειρά του προφίλ, κλείδωσέ τη και μετά κάνε επικόλληση όλων των λεζαντών σε ένα κείμενο.</Subtitle>
 
           <Form onSubmit={handleUpload}>
@@ -1111,9 +1155,9 @@ function AdminApp() {
               <ActionButton type="submit" $type="primary" disabled={busy}>
                 {busy ? '⏳ Γίνεται ανέβασμα...' : '⬆ Ανέβασμα + Δημοσίευση τελικής σειράς'}
               </ActionButton>
-              <ActionButton type="button" disabled={!hasPublishedPosts} onClick={openClientPreviewTab}>
-                👁 Άνοιγμα προεπισκόπησης πελάτη
-              </ActionButton>
+            <ActionButton type="button" disabled={!hasPublishedPosts} onClick={openClientPreviewTab}>
+              👁 Άνοιγμα προεπισκόπησης πελάτη
+            </ActionButton>
               <ActionButton type="button" disabled={!hasPublishedPosts} onClick={copyClientShareLink}>
                 ⧉ Αντιγραφή share link
               </ActionButton>

@@ -44,8 +44,12 @@ Because this app is frontend static + Supabase API calls, update `public/config.
 Never use service role key in frontend.
 
 ## 6. Usage flow
-1. Open `/public/admin.html`
+1. Open `/public/portal.html`
 2. Sign in with admin account
-3. Upload images/videos + captions
-4. Posts publish instantly
-5. Share `/public/index.html` with client
+3. `Add client feed` for each client
+4. Open client Admin from portal and upload images/videos + captions
+5. Share each client preview link from portal (unique `?client=...`)
+
+## 7. Multi-client migration note
+If this project was already running with old schema, run `/supabase/schema.sql` again.
+It now adds `clients` table and `posts.client_id` to support unlimited client feeds.
