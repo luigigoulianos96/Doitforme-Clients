@@ -7,14 +7,14 @@ import {
   getClientSlugFromUrl,
   getPreviewModeFromUrl
 } from './utils/appHelpers.js';
-import { AppPageLayout } from './components/layout/AppPageLayout.jsx';
-import { HeroStatsSection } from './components/sections/HeroStatsSection.jsx';
-import { StatusMessagesSection } from './components/sections/StatusMessagesSection.jsx';
-import { ArticlePreviewSection } from './components/sections/ArticlePreviewSection.jsx';
-import { InstagramPreviewSection } from './components/sections/InstagramPreviewSection.jsx';
-import { LogoPreviewSection } from './components/sections/LogoPreviewSection.jsx';
-import { PostCard } from './components/cards/PostCard.jsx';
-import { LogoKitPresentation } from './components/logo/LogoKitPresentation.jsx';
+import { AppPageLayout } from './components/layout/AppPageLayout.js';
+import { HeroStatsSection } from './components/sections/HeroStatsSection.js';
+import { StatusMessagesSection } from './components/sections/StatusMessagesSection.js';
+import { ArticlePreviewSection } from './components/sections/ArticlePreviewSection.js';
+import { InstagramPreviewSection } from './components/sections/InstagramPreviewSection.js';
+import { LogoPreviewSection } from './components/sections/LogoPreviewSection.js';
+import { PostCard } from './components/cards/PostCard.js';
+import { LogoKitPresentation } from './components/logo/LogoKitPresentation.js';
 
 function App() {
   const [clientSlug] = useState(getClientSlugFromUrl());
