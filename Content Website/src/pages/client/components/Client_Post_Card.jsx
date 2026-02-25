@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { Main_, Red_, Grey_Link, Textarea_ } from '/node_modules/monica-alexandria/dist/index.mjs';
 import { relative_date_label, format_history_datetime } from '/src/utils/format/date_labels.jsx';
@@ -105,6 +105,14 @@ const NoteTitle = styled.h6`
   color: ${(p) => p.theme.flare};
 `;
 
+const Notice = styled.p`
+  margin: 0;
+  padding: var(--smallPads);
+  border-radius: var(--smallRadius);
+  background: ${(p) => p.theme.mid};
+  color: ${(p) => p.theme.color};
+`;
+
 const MediaRendererByKind = {
   image: ({ post, fallback }) => <MediaImage src={post.image_url} alt={post.title || fallback} loading="lazy" />,
   video: ({ post }) => <MediaVideo src={post.image_url} controls playsInline preload="metadata" />,
@@ -121,11 +129,26 @@ const MediaRendererByKind = {
 export const Client_Post_Card = ({ post, index, pending, historyEntries, onUpdateReview, onAppendHistory }) => {
   const [notes, setNotes] = useState('');
   const [showHistory, setShowHistory] = useState(false);
+  const [decisionLocked, setDecisionLocked] = useState(post.approval_status !== 'pending');
+  const [noticeText, setNoticeText] = useState('');
   const fallback = `Ανάρτηση ${index + 1}`;
   const mediaKind = post.image_url ? detect_post_media_kind(post) : 'empty';
   const RenderMedia = MediaRendererByKind[mediaKind];
   const trimmedNotes = notes.trim();
   const noteMissing = trimmedNotes.length === 0;
+
+  useEffect(() => {
+    setDecisionLocked(post.approval_status !== 'pending');
+  }, [post.approval_status]);
+
+  useEffect(() => {
+    const shouldClear = noticeText.length > 0;
+    const timerId = shouldClear ? window.setTimeout(() => setNoticeText(''), 2200) : 0;
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [noticeText]);
 
   const handle_save_notes = async () => {
     if (noteMissing) {
@@ -157,6 +180,8 @@ export const Client_Post_Card = ({ post, index, pending, historyEntries, onUpdat
     if (isSaved) {
       onAppendHistory(post.id, historyText, historyActionMap[nextStatus]);
       setNotes('');
+      setDecisionLocked(true);
+      setNoticeText(nextStatus === 'approved' ? 'Εγκρίνατε τη δημοσίευση.' : 'Απορρίψατε τη δημοσίευση.');
     }
   };
 
@@ -187,10 +212,13 @@ export const Client_Post_Card = ({ post, index, pending, historyEntries, onUpdat
 
         <ActionRow>
           <Main_ text={pending ? 'Αποθήκευση...' : 'Αποθήκευση σημείωσης'} onClick={handle_save_notes} disabled={pending || noteMissing} />
-          <Main_ text="Έγκριση" onClick={() => handle_decision('approved')} disabled={pending} />
-          <Red_ text="Απόρριψη" onClick={() => handle_decision('disapproved')} disabled={pending} />
+          {!decisionLocked && <Main_ text="Έγκριση" onClick={() => handle_decision('approved')} disabled={pending} />}
+          {!decisionLocked && <Red_ text="Απόρριψη" onClick={() => handle_decision('disapproved')} disabled={pending} />}
+          {decisionLocked && <Main_ text="Αλλαγή Απόφασης" onClick={() => setDecisionLocked(false)} disabled={pending} />}
           <Grey_Link text={showHistory ? 'Κλείσιμο ιστορικού' : 'Ιστορικό σημειώσεων'} onClick={() => setShowHistory(!showHistory)} />
         </ActionRow>
+
+        {noticeText && <Notice>{noticeText}</Notice>}
 
         {showHistory && (
           <HistoryWrap>

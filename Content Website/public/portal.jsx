@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import styled, { createGlobalStyle } from 'styled-components';
@@ -15,6 +15,8 @@ const AppStyle = createGlobalStyle`
   }
 
   * { box-sizing: border-box; }
+
+  img { width: 100%; }
 
   body {
     margin: 0;
@@ -198,6 +200,8 @@ function PortalApp() {
   const [clients, setClients] = useState([]);
   const [posts, setPosts] = useState([]);
   const [clientNameInput, setClientNameInput] = useState('');
+  const previousChangesByClientRef = useRef({});
+  const notificationsReadyRef = useRef(false);
 
   useEffect(() => {
     const supabaseClient = createSupabaseClient();
@@ -246,7 +250,32 @@ function PortalApp() {
   useEffect(() => {
     if (!client || !session) return;
     loadPortalData();
+    const timer = window.setInterval(() => {
+      loadPortalData();
+    }, 15000);
+    return () => window.clearInterval(timer);
   }, [client, session]);
+
+  async function enableDesktopNotifications() {
+    const hasSupport = typeof window !== 'undefined' && 'Notification' in window;
+    if (!hasSupport) {
+      setStatus('Ο browser δεν υποστηρίζει desktop notifications.');
+      return;
+    }
+
+    if (window.Notification.permission === 'granted') {
+      setStatus('Οι desktop ειδοποιήσεις είναι ήδη ενεργές.');
+      return;
+    }
+
+    const permission = await window.Notification.requestPermission();
+    if (permission === 'granted') {
+      setStatus('Οι desktop ειδοποιήσεις ενεργοποιήθηκαν.');
+      return;
+    }
+
+    setStatus('Οι desktop ειδοποιήσεις δεν επιτράπηκαν.');
+  }
 
   async function handleSignIn(event) {
     event.preventDefault();
@@ -272,6 +301,8 @@ function PortalApp() {
     setSession(null);
     setClients([]);
     setPosts([]);
+    previousChangesByClientRef.current = {};
+    notificationsReadyRef.current = false;
     setStatus(error ? `Σφάλμα αποσύνδεσης: ${error.message}` : 'Έγινε αποσύνδεση.');
   }
 
@@ -373,6 +404,41 @@ function PortalApp() {
     }, {});
   }, [posts]);
 
+  useEffect(() => {
+    if (!session) return;
+
+    const nextMap = { ...changesByClient };
+    const previousMap = previousChangesByClientRef.current || {};
+
+    if (!notificationsReadyRef.current) {
+      previousChangesByClientRef.current = nextMap;
+      notificationsReadyRef.current = true;
+      return;
+    }
+
+    const hasSupport = typeof window !== 'undefined' && 'Notification' in window;
+    const canNotify = hasSupport && window.Notification.permission === 'granted';
+
+    if (canNotify) {
+      clients.forEach((feedClient) => {
+        const previousValue = previousMap[feedClient.id] || 0;
+        const nextValue = nextMap[feedClient.id] || 0;
+        const increase = nextValue - previousValue;
+        if (increase <= 0) return;
+
+        const body = increase === 1
+          ? `Έχετε 1 νέα ειδοποίηση από τον πελάτη: ${feedClient.name}`
+          : `Έχετε ${increase} νέες ειδοποιήσεις από τον πελάτη: ${feedClient.name}`;
+
+        new window.Notification('Content Portal', {
+          body
+        });
+      });
+    }
+
+    previousChangesByClientRef.current = nextMap;
+  }, [session, clients, changesByClient]);
+
   if (configError) {
     return (
       <>
@@ -420,6 +486,7 @@ function PortalApp() {
           <Row>
             <Input value={clientNameInput} onChange={(event) => setClientNameInput(event.target.value)} placeholder="Όνομα νέου client" />
             <Button $primary type="button" onClick={createClientFeed} disabled={busy}>Add client feed</Button>
+            <Button type="button" onClick={enableDesktopNotifications}>Ενεργοποίηση ειδοποιήσεων</Button>
             <Button type="button" onClick={handleSignOut}>Αποσύνδεση</Button>
           </Row>
           {status && <Status>{status}</Status>}
@@ -428,8 +495,6 @@ function PortalApp() {
         <Grid>
           {clients.map((feedClient) => {
             const changes = changesByClient[feedClient.id] || 0;
-            const previewUrl = `${window.location.origin}/public/index.html?client=${encodeURIComponent(feedClient.slug)}`;
-
             return (
               <Card key={feedClient.id}>
                 <h3>{feedClient.name}</h3>
@@ -440,12 +505,6 @@ function PortalApp() {
                 <Actions>
                   <Button $primary type="button" onClick={() => { window.location.href = `./admin.html?client=${encodeURIComponent(feedClient.slug)}`; }}>
                     Άνοιγμα Admin
-                  </Button>
-                  <Button type="button" onClick={() => window.open(`./index.html?client=${encodeURIComponent(feedClient.slug)}`, '_blank', 'noopener,noreferrer')}>
-                    Άνοιγμα Preview
-                  </Button>
-                  <Button type="button" onClick={() => navigator.clipboard.writeText(previewUrl)}>
-                    Αντιγραφή Preview Link
                   </Button>
                   <Button $danger type="button" disabled={busy} onClick={() => deleteClientFeed(feedClient)}>
                     Διαγραφή Client

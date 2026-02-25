@@ -5,9 +5,9 @@ import { approval_status_label, parse_captions_text, slug_filename } from '/src/
 import { review_state_key, review_state_label, build_approval_overview } from '/src/pages/admin/utils/admin_page_helpers.jsx';
 import { Admin_Login_Form } from '/src/pages/admin/components/Admin_Login_Form.jsx';
 import { Admin_Media_List } from '/src/pages/admin/components/Admin_Media_List.jsx';
-import { Card, Grey_Link, Main_, Page, Red_, Textarea_ } from 'monica-alexandria';
+import { Card, Grey_Link, Main_, Page as MonicaPage, Red_, Textarea_ } from 'monica-alexandria';
 
-const Page = styled(Page)`
+const AdminPage = styled(MonicaPage)`
   // width: min(120rem, 94vw);
   // margin: 0 auto;
   // padding: 4rem 0;
@@ -19,6 +19,11 @@ const Hero = styled(Card)`
   padding: var(--largePads);
   display: grid;
   gap: 1rem;
+`;
+
+const TopActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
 `;
 
 const Dropzone = styled.div`
@@ -34,6 +39,13 @@ const Actions = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
+`;
+
+const ShareRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
 `;
 
 const StateText = styled.p`
@@ -99,6 +111,7 @@ export const ADMIN = () => {
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [posts, setPosts] = useState([]);
+  const [copyStatus, setCopyStatus] = useState('');
 
   useEffect(() => {
     const supabaseClient = create_supabase_client();
@@ -245,6 +258,25 @@ export const ADMIN = () => {
     setStatus('Έγινε αποσύνδεση.');
   };
 
+  // Opens the client preview in a separate tab to preserve current admin form state.
+  // Backend integration: preview URL points to the already published posts list.
+  const open_preview_tab = () => {
+    window.open('/public/index.html', '_blank', 'noopener,noreferrer');
+  };
+
+  // Copies the client share URL into clipboard for quick distribution.
+  // Backend integration: this URL should stay mapped to the public client preview route.
+  const copy_share_link = async () => {
+    const shareUrl = `${window.location.origin}/public/index.html`;
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopyStatus('Το link αντιγράφηκε.');
+    } catch {
+      setCopyStatus('Δεν έγινε αντιγραφή link.');
+    }
+  };
+
   const handle_upload = async (event) => {
     event.preventDefault();
 
@@ -264,6 +296,8 @@ export const ADMIN = () => {
 
     const captions = parse_captions_text(captionsText);
     const bucket = resolve_storage_bucket();
+    const highestSortOrder = posts.reduce((max, post) => Math.max(max, post.sort_order || 0), 0);
+    const nextSortOrderStart = highestSortOrder + 1;
 
     setBusy(true);
     setStatus('Γίνεται ανέβασμα και δημιουργία αναρτήσεων...');
@@ -288,13 +322,13 @@ export const ADMIN = () => {
         title: file.name,
         image_url: publicData.publicUrl,
         image_path: path,
-        caption: captions[index] || `Post ${index + 1}: Η λεζάντα εκκρεμεί.`,
+        caption: captions[index] || `Post ${nextSortOrderStart + index}: Η λεζάντα εκκρεμεί.`,
         status: 'published',
         approval_status: 'pending',
         client_notes: '',
         username: 'gymway.official',
         like_count: 160 + index * 20,
-        sort_order: index + 1
+        sort_order: nextSortOrderStart + index
       };
 
       const { error: insertError } = await client.from('posts').insert(payload);
@@ -413,20 +447,21 @@ export const ADMIN = () => {
   const captions = parse_captions_text(captionsText);
   const mappedCaptions = mediaItems.reduce((total, _item, index) => total + (captions[index] ? 1 : 0), 0);
   const overview = build_approval_overview(posts, review_state_key);
+  const hasPublishedPosts = posts.length > 0;
 
   if (configError) {
     return (
-      <Page>
+      <AdminPage>
         <Hero>
           <ErrorText>{configError}</ErrorText>
         </Hero>
-      </Page>
+      </AdminPage>
     );
   }
 
   if (!session) {
     return (
-      <Page>
+      <AdminPage>
         <Hero>
           <h1>Gym Way Διαχείριση Περιεχομένου</h1>
           <p>Συνδέσου για ανέβασμα αρχείων και διαχείριση εγκρίσεων.</p>
@@ -439,15 +474,19 @@ export const ADMIN = () => {
             onSubmit={handle_sign_in}
           />
           {status && <StateText>{status}</StateText>}
-          <Grey_Link text="Μετάβαση στην προεπισκόπηση πελάτη" onClick={() => { window.location.href = '/public/index.html'; }} />
+          <Grey_Link text="Μετάβαση στην προεπισκόπηση πελάτη" onClick={open_preview_tab} />
         </Hero>
-      </Page>
+      </AdminPage>
     );
   }
 
   return (
-    <Page>
+    <AdminPage>
       <Hero>
+        <TopActions>
+          <Main_ text="Αποσύνδεση" onClick={handle_sign_out} />
+        </TopActions>
+
         <h1>Ανέβασμα Περιεχομένου σε 3 Βήματα</h1>
         <p>Ρίξε αρχεία, βάλε την τελική σειρά, κλείδωσέ τη και μετά κάνε επικόλληση όλων των λεζαντών.</p>
 
@@ -505,11 +544,16 @@ export const ADMIN = () => {
 
           <Actions>
             <Main_ text={busy ? 'Γίνεται ανέβασμα...' : 'Ανέβασμα + Δημοσίευση τελικής σειράς'} disabled={busy} />
-            <Main_ text="Αποσύνδεση" onClick={handle_sign_out} />
             <Red_ text="Οριστική διαγραφή όλων" onClick={delete_all_posts_permanently} disabled={busy || posts.length === 0} />
-            <Grey_Link text="Άνοιγμα προεπισκόπησης πελάτη" onClick={() => { window.location.href = '/public/index.html'; }} />
           </Actions>
         </form>
+
+        <ShareRow>
+          <Main_ text="Άνοιγμα προεπισκόπησης πελάτη" onClick={open_preview_tab} disabled={!hasPublishedPosts} />
+          <Main_ text="Αντιγραφή share link" onClick={copy_share_link} disabled={!hasPublishedPosts} />
+          {!hasPublishedPosts && <StateText>Η προεπισκόπηση ενεργοποιείται μετά το πρώτο ολοκληρωμένο upload.</StateText>}
+          {copyStatus && <StateText>{copyStatus}</StateText>}
+        </ShareRow>
 
         {status && <StateText>{status}</StateText>}
       </Hero>
@@ -544,7 +588,7 @@ export const ADMIN = () => {
           </PostRow>
         ))}
       </PostList>
-    </Page>
+    </AdminPage>
   );
 };
 

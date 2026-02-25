@@ -27,6 +27,11 @@ const Tile = styled.article`
   background: ${(p) => p.theme.low};
   display: grid;
   gap: 0.8rem;
+  cursor: ${(p) => (p.$draggable ? 'grab' : 'default')};
+
+  &:active {
+    cursor: ${(p) => (p.$draggable ? 'grabbing' : 'default')};
+  }
 `;
 
 const Thumb = styled.div`
@@ -55,7 +60,7 @@ export const Admin_Media_List = ({ items, orderLocked, onDragStart, onDragOver, 
   return (
     <Grid>
       {items.map((item, index) => (
-        <Tile key={item.id} draggable={!orderLocked} onDragStart={() => onDragStart(item.id)} onDragOver={onDragOver} onDrop={() => onDrop(item.id)}>
+        <Tile key={item.id} $draggable={!orderLocked} draggable={!orderLocked} onDragStart={() => onDragStart(item.id)} onDragOver={onDragOver} onDrop={() => onDrop(item.id)}>
           <h6>Ανάρτηση {index + 1}</h6>
           <Thumb>
             {item.kind === 'video' && <Video src={item.previewUrl} muted playsInline preload="metadata" />}
