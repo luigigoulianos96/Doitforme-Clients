@@ -1,8 +1,12 @@
 {
   "scripts": {
-    "start": "PORT=4180 node server.js"
+    "start": "PORT=4180 node server.js",
+    "migrate:storage": "node scripts/migrate-supabase-storage-to-minio.js",
+    "backfill:media-urls": "node scripts/backfill-media-urls-to-minio.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.883.0",
+    "@aws-sdk/s3-request-presigner": "^3.883.0",
     "monica-alexandria": "^4.5.15"
   }
 }

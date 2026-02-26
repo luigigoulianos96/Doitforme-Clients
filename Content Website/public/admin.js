@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import styled, { createGlobalStyle } from 'styled-components';
+import { uploadFile as uploadStorageFile, deleteFile as deleteStorageFile, getPublicUrl as getStoragePublicUrl } from './services/storageService.js';
 
 const AppStyle = createGlobalStyle`
   :root {
@@ -668,6 +669,32 @@ function createSupabaseClient() {
   return createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
 }
 
+function createStorageAdapter() {
+  return {
+    async upload(path, file) {
+      try {
+        const savedPath = await uploadStorageFile({ file, path });
+        return { data: { path: savedPath }, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    getPublicUrl(path) {
+      return { data: { publicUrl: getStoragePublicUrl(path) } };
+    },
+    async remove(paths) {
+      try {
+        for (let i = 0; i < (paths || []).length; i += 1) {
+          await deleteStorageFile({ path: paths[i] });
+        }
+        return { data: paths || [], error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    }
+  };
+}
+
 function getClientSlugFromUrl() {
   const params = new URLSearchParams(window.location.search);
   return params.get('client') || '';
@@ -1274,7 +1301,7 @@ function AdminApp() {
 
     setBusy(true);
     setStatus('Γίνεται ανέβασμα άρθρων...');
-    const bucket = (window.APP_CONFIG && window.APP_CONFIG.STORAGE_BUCKET) || 'post-photos';
+    const storage = createStorageAdapter();
     const highestSortOrder = posts.reduce((max, post) => Math.max(max, post.sort_order || 0), 0);
 
     for (let i = 0; i < readyDrafts.length; i += 1) {
@@ -1285,9 +1312,7 @@ function AdminApp() {
       if (draft.imageFile) {
         const fileName = `${Date.now()}-article-${i}-${slugFilename(draft.imageFile.name)}`;
         const path = `${session.user.id}/${fileName}`;
-        const { error: uploadError } = await client.storage
-          .from(bucket)
-          .upload(path, draft.imageFile, { cacheControl: '3600', upsert: false });
+        const { error: uploadError } = await storage.upload(path, draft.imageFile, { cacheControl: '3600', upsert: false });
 
         if (uploadError) {
           setStatus(`Σφάλμα upload άρθρου (${draft.title}): ${uploadError.message}`);
@@ -1295,7 +1320,7 @@ function AdminApp() {
           return;
         }
 
-        const { data: publicData } = client.storage.from(bucket).getPublicUrl(path);
+        const { data: publicData } = storage.getPublicUrl(path);
         imagePath = path;
         imageUrl = publicData.publicUrl;
       }
@@ -1490,7 +1515,7 @@ function AdminApp() {
 
     setBusy(true);
     setStatus('Γίνεται ανέβασμα logo kit...');
-    const bucket = (window.APP_CONFIG && window.APP_CONFIG.STORAGE_BUCKET) || 'post-photos';
+    const storage = createStorageAdapter();
     const nextVersion = (logoKits[0]?.version || 0) + 1;
     const { data: insertedKit, error: insertKitError } = await client
       .from('logo_kits')
@@ -1518,14 +1543,12 @@ function AdminApp() {
         const item = items[i];
         const fileName = `${Date.now()}-${prefix.toLowerCase()}-${i}-${slugFilename(item.file.name)}`;
         const path = `${session.user.id}/${fileName}`;
-        const { error: uploadError } = await client.storage
-          .from(bucket)
-          .upload(path, item.file, { cacheControl: '3600', upsert: false });
+        const { error: uploadError } = await storage.upload(path, item.file, { cacheControl: '3600', upsert: false });
         if (uploadError) {
           setStatus(`Σφάλμα upload ${label} (${item.file.name}): ${uploadError.message}`);
           return { ok: false };
         }
-        const { data: publicData } = client.storage.from(bucket).getPublicUrl(path);
+        const { data: publicData } = storage.getPublicUrl(path);
         const { error: insertError } = await client.from('logo_assets').insert({
           logo_kit_id: insertedKit.id,
           asset_type: 'visual',
@@ -1549,14 +1572,12 @@ function AdminApp() {
         const item = items[i];
         const fileName = `${Date.now()}-${prefix.toLowerCase()}-${i}-${slugFilename(item.file.name)}`;
         const path = `${session.user.id}/${fileName}`;
-        const { error: uploadError } = await client.storage
-          .from(bucket)
-          .upload(path, item.file, { cacheControl: '3600', upsert: false });
+        const { error: uploadError } = await storage.upload(path, item.file, { cacheControl: '3600', upsert: false });
         if (uploadError) {
           setStatus(`Σφάλμα upload font (${item.file.name}): ${uploadError.message}`);
           return { ok: false };
         }
-        const { data: publicData } = client.storage.from(bucket).getPublicUrl(path);
+        const { data: publicData } = storage.getPublicUrl(path);
         const { error: insertError } = await client.from('logo_assets').insert({
           logo_kit_id: insertedKit.id,
           asset_type: 'font',
@@ -1761,7 +1782,7 @@ function AdminApp() {
     setBusy(true);
     setStatus('Γίνεται ανέβασμα και δημιουργία αναρτήσεων...');
 
-    const bucket = (window.APP_CONFIG && window.APP_CONFIG.STORAGE_BUCKET) || 'post-photos';
+    const storage = createStorageAdapter();
 
     const dynamicUsername = (selectedClient?.slug || selectedClient?.name || '').trim();
     const feedPublishItems = mediaItems.map((item, index) => ({
@@ -1787,9 +1808,7 @@ function AdminApp() {
         const fileName = `${Date.now()}-single-${feedIndex}-${slugFilename(file.name)}`;
         const path = `${session.user.id}/${fileName}`;
 
-        const { error: uploadError } = await client.storage
-          .from(bucket)
-          .upload(path, file, { cacheControl: '3600', upsert: false });
+        const { error: uploadError } = await storage.upload(path, file, { cacheControl: '3600', upsert: false });
 
         if (uploadError) {
           setStatus(`Σφάλμα upload (${file.name}): ${uploadError.message}`);
@@ -1797,7 +1816,7 @@ function AdminApp() {
           return;
         }
 
-        const { data: publicData } = client.storage.from(bucket).getPublicUrl(path);
+        const { data: publicData } = storage.getPublicUrl(path);
         const payload = {
           title: makeTypedTitle('instagram', `SINGLE::${file.name}`),
           image_url: publicData.publicUrl,
@@ -1830,9 +1849,7 @@ function AdminApp() {
           const fileName = `${Date.now()}-carousel-${feedIndex}-${slideIndex}-${slugFilename(file.name)}`;
           const path = `${session.user.id}/${fileName}`;
 
-          const { error: uploadError } = await client.storage
-            .from(bucket)
-            .upload(path, file, { cacheControl: '3600', upsert: false });
+          const { error: uploadError } = await storage.upload(path, file, { cacheControl: '3600', upsert: false });
 
           if (uploadError) {
             setStatus(`Σφάλμα upload (${file.name}): ${uploadError.message}`);
@@ -1840,7 +1857,7 @@ function AdminApp() {
             return;
           }
 
-          const { data: publicData } = client.storage.from(bucket).getPublicUrl(path);
+          const { data: publicData } = storage.getPublicUrl(path);
           const payload = {
             title: makeTypedTitle('instagram', `CAROUSEL::${carouselGroupId}::${slideIndex + 1}::${file.name}`),
             image_url: publicData.publicUrl,
@@ -1870,9 +1887,7 @@ function AdminApp() {
       const file = storyItem.file;
       const fileName = `${Date.now()}-story-${i}-${slugFilename(file.name)}`;
       const path = `${session.user.id}/${fileName}`;
-      const { error: uploadError } = await client.storage
-        .from(bucket)
-        .upload(path, file, { cacheControl: '3600', upsert: false });
+      const { error: uploadError } = await storage.upload(path, file, { cacheControl: '3600', upsert: false });
 
       if (uploadError) {
         setStatus(`Σφάλμα upload story (${file.name}): ${uploadError.message}`);
@@ -1880,7 +1895,7 @@ function AdminApp() {
         return;
       }
 
-      const { data: publicData } = client.storage.from(bucket).getPublicUrl(path);
+      const { data: publicData } = storage.getPublicUrl(path);
       const payload = {
         title: makeTypedTitle('instagram', `STORY::${file.name}`),
         image_url: publicData.publicUrl,
@@ -1907,15 +1922,13 @@ function AdminApp() {
       const file = gridItem.file;
       const fileName = `${Date.now()}-grid9-${slugFilename(file.name)}`;
       const path = `${session.user.id}/${fileName}`;
-      const { error: uploadError } = await client.storage
-        .from(bucket)
-        .upload(path, file, { cacheControl: '3600', upsert: false });
+      const { error: uploadError } = await storage.upload(path, file, { cacheControl: '3600', upsert: false });
       if (uploadError) {
         setStatus(`Σφάλμα upload 9άδας (${file.name}): ${uploadError.message}`);
         setBusy(false);
         return;
       }
-      const { data: publicData } = client.storage.from(bucket).getPublicUrl(path);
+      const { data: publicData } = storage.getPublicUrl(path);
       const payload = {
         title: makeTypedTitle('instagram', `GRID9::${file.name}`),
         image_url: publicData.publicUrl,
@@ -1997,7 +2010,7 @@ function AdminApp() {
     setBusy(true);
     setStatus(`Αποθήκευση αλλαγών για "${stripPostTypePrefix(post.title)}"...`);
 
-    const bucket = (window.APP_CONFIG && window.APP_CONFIG.STORAGE_BUCKET) || 'post-photos';
+    const storage = createStorageAdapter();
     const selectedFile = replacementFiles[post.id];
     const nextCaption = captionDrafts[post.id] ?? post.caption;
     let nextImageUrl = post.image_url;
@@ -2007,9 +2020,7 @@ function AdminApp() {
     if (selectedFile) {
       const nextFileName = `${Date.now()}-${slugFilename(selectedFile.name)}`;
       const nextPath = `${session.user.id}/${nextFileName}`;
-      const { error: uploadError } = await client.storage
-        .from(bucket)
-        .upload(nextPath, selectedFile, { cacheControl: '3600', upsert: false });
+      const { error: uploadError } = await storage.upload(nextPath, selectedFile, { cacheControl: '3600', upsert: false });
 
       if (uploadError) {
         setStatus(`Σφάλμα upload (${selectedFile.name}): ${uploadError.message}`);
@@ -2017,7 +2028,7 @@ function AdminApp() {
         return;
       }
 
-      const { data: publicData } = client.storage.from(bucket).getPublicUrl(nextPath);
+      const { data: publicData } = storage.getPublicUrl(nextPath);
       nextImageUrl = publicData.publicUrl;
       nextImagePath = nextPath;
       nextTitle = makeTypedTitle(parsePostType(post), selectedFile.name);
@@ -2040,7 +2051,7 @@ function AdminApp() {
     }
 
     if (selectedFile && post.image_path && post.image_path !== nextImagePath) {
-      await client.storage.from(bucket).remove([post.image_path]);
+      await storage.remove([post.image_path]);
     }
 
     setCaptionDrafts((prev) => {
@@ -2074,10 +2085,10 @@ function AdminApp() {
     setBusy(true);
     setStatus(`Διαγραφή ${stripPostTypePrefix(post.title)}...`);
 
-    const bucket = (window.APP_CONFIG && window.APP_CONFIG.STORAGE_BUCKET) || 'post-photos';
+    const storage = createStorageAdapter();
 
     if (post.image_path) {
-      const { error: storageError } = await client.storage.from(bucket).remove([post.image_path]);
+      const { error: storageError } = await storage.remove([post.image_path]);
       if (storageError) {
         setStatus(`Σφάλμα διαγραφής storage: ${storageError.message}`);
         setBusy(false);
@@ -2150,7 +2161,7 @@ function AdminApp() {
 
     setBusy(true);
     setStatus(`Διαγραφή ${logoKit.title}...`);
-    const bucket = (window.APP_CONFIG && window.APP_CONFIG.STORAGE_BUCKET) || 'post-photos';
+    const storage = createStorageAdapter();
 
     const { data: assets, error: assetsError } = await client
       .from('logo_assets')
@@ -2165,7 +2176,7 @@ function AdminApp() {
 
     const paths = (assets || []).map((asset) => asset.file_path).filter(Boolean);
     if (paths.length > 0) {
-      const { error: storageError } = await client.storage.from(bucket).remove(paths);
+      const { error: storageError } = await storage.remove(paths);
       if (storageError) {
         setStatus(`Σφάλμα διαγραφής storage: ${storageError.message}`);
         setBusy(false);
@@ -2193,7 +2204,7 @@ function AdminApp() {
 
       setBusy(true);
       setStatus('Γίνεται οριστική διαγραφή όλων των logo kits...');
-      const bucket = (window.APP_CONFIG && window.APP_CONFIG.STORAGE_BUCKET) || 'post-photos';
+      const storage = createStorageAdapter();
 
       const kitIds = logoKits.map((kit) => kit.id);
       const { data: assets, error: assetsError } = await client
@@ -2209,7 +2220,7 @@ function AdminApp() {
 
       const paths = (assets || []).map((asset) => asset.file_path).filter(Boolean);
       if (paths.length > 0) {
-        const { error: storageError } = await client.storage.from(bucket).remove(paths);
+        const { error: storageError } = await storage.remove(paths);
         if (storageError) {
           setStatus(`Σφάλμα διαγραφής storage: ${storageError.message}`);
           setBusy(false);
@@ -2238,11 +2249,11 @@ function AdminApp() {
     setBusy(true);
     setStatus(`Γίνεται οριστική διαγραφή για "${CONTENT_TABS[activeTab]}"...`);
 
-    const bucket = (window.APP_CONFIG && window.APP_CONFIG.STORAGE_BUCKET) || 'post-photos';
+    const storage = createStorageAdapter();
     const paths = targetPosts.map((post) => post.image_path).filter(Boolean);
 
     if (paths.length > 0) {
-      const { error: storageError } = await client.storage.from(bucket).remove(paths);
+      const { error: storageError } = await storage.remove(paths);
       if (storageError) {
         setStatus(`Σφάλμα διαγραφής storage: ${storageError.message}`);
         setBusy(false);

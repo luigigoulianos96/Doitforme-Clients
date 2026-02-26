@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import styled, { createGlobalStyle } from 'styled-components';
+import { deleteFile as deleteStorageFile } from './services/storageService.js';
 
 const AppStyle = createGlobalStyle`
   :root {
@@ -165,9 +166,19 @@ function createSupabaseClient() {
   return createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
 }
 
-function resolveStorageBucket() {
-  const config = window.APP_CONFIG || {};
-  return config.STORAGE_BUCKET || 'post-photos';
+function createStorageAdapter() {
+  return {
+    async remove(paths) {
+      try {
+        for (let i = 0; i < (paths || []).length; i += 1) {
+          await deleteStorageFile({ path: paths[i] });
+        }
+        return { data: paths || [], error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    }
+  };
 }
 
 function slugify(value) {
@@ -352,7 +363,7 @@ function PortalApp() {
     setBusy(true);
     setStatus(`Διαγραφή client "${feedClient.name}" και όλων των δεδομένων...`);
 
-    const bucket = resolveStorageBucket();
+    const storage = createStorageAdapter();
     const { data: clientPosts, error: postsFetchError } = await client
       .from('posts')
       .select('id,image_path')
@@ -367,7 +378,7 @@ function PortalApp() {
     const paths = (clientPosts || []).map((post) => post.image_path).filter(Boolean);
 
     if (paths.length > 0) {
-      const { error: storageError } = await client.storage.from(bucket).remove(paths);
+      const { error: storageError } = await storage.remove(paths);
       if (storageError) {
         setStatus(`Σφάλμα διαγραφής storage: ${storageError.message}`);
         setBusy(false);

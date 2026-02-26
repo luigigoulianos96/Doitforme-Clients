@@ -1,55 +1,61 @@
-# Gym Way - Free Live Setup (Vercel + Supabase)
+# Deployment Guide (Vercel + Supabase)
 
-## 1. Supabase project
-1. Create a free project at https://supabase.com
-2. Open SQL Editor and run `/supabase/schema.sql`.
-3. Authentication -> Users -> Create user (your admin email/password).
-4. SQL: make user admin (replace email):
+## 1. Supabase Setup
+1. Create a project at https://supabase.com
+2. Run `supabase/schema.sql` in SQL Editor.
+3. Create admin user from Authentication -> Users.
+4. From Project Settings -> API copy:
+   - Project URL
+   - anon public key
 
-```sql
-insert into public.profiles (id, email, is_admin)
-select id, email, true
-from auth.users
-where email = 'YOUR_ADMIN_EMAIL'
-on conflict (id) do update set is_admin = true;
-```
+## 2. Frontend Config
+1. Copy `public/config.example.js` to `public/config.js`
+2. Set:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - optional `STORAGE_BUCKET`
 
-5. Project Settings -> API:
-- copy `Project URL`
-- copy `anon public` key
+Never use service role keys in frontend config.
 
-## 2. Local config
-1. Copy `/public/config.example.js` to `/public/config.js`
-2. Fill `SUPABASE_URL` and `SUPABASE_ANON_KEY`
-
-## 3. Local run
+## 3. Local Run
 ```bash
 cd "/Users/luigigoulianos/Projects/Clients/Doitforme-Clients/Content Website"
 npm start
 ```
-- Public: `http://localhost:4180/public/index.html`
-- Admin: `http://localhost:4180/public/admin.html`
 
-## 4. Deploy free on Vercel
-1. Push repo to GitHub.
-2. Import project in Vercel (Hobby free).
+Local URLs:
+- `http://localhost:4180/public/portal.html`
+- `http://localhost:4180/public/admin.html`
+- `http://localhost:4180/public/index.html`
+
+## 4. Vercel Deploy
+1. Push repository to GitHub.
+2. Import project in Vercel.
 3. Build settings:
-- Framework: Other
-- Root: repository root
-- Build command: none
-- Output: none (static files served as-is)
+   - Framework: `Other`
+   - Build command: none
+   - Output directory: none (serve static files directly)
+4. Ensure `vercel.json` is included in deploy.
 
-## 5. Set live config on Vercel
-Because this app is frontend static + Supabase API calls, update `public/config.js` with real Supabase values before deploy.
-Never use service role key in frontend.
+## 5. Post-Deploy Validation
+1. Open `/portal` (or `/public/portal.html`).
+2. Login with admin account.
+3. Create/select client.
+4. Open admin and upload one media item.
+5. Open preview link with query params:
+   - `/index?client=<slug>&mode=instagram`
+6. Confirm data load and one review action update.
 
-## 6. Usage flow
-1. Open `/public/portal.html`
-2. Sign in with admin account
-3. `Add client feed` for each client
-4. Open client Admin from portal and upload images/videos + captions
-5. Share each client preview link from portal (unique `?client=...`)
+## 6. Common Production Issues
 
-## 7. Multi-client migration note
-If this project was already running with old schema, run `/supabase/schema.sql` again.
-It now adds `clients` table and `posts.client_id` to support unlimited client feeds.
+### 401/403 from Supabase
+- Check anon key in `public/config.js`.
+- Check RLS policies and authenticated session.
+
+### Missing files or broken routes
+- Check `vercel.json` rewrites.
+- Check runtime files exist in `public/`.
+
+### Preview page empty
+- Check `client` query param matches existing `clients.slug`.
+- Check expected `posts` rows for that client.
