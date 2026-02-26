@@ -3,6 +3,10 @@ import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import styled, { createGlobalStyle } from 'styled-components';
 import { uploadFile as uploadStorageFile, deleteFile as deleteStorageFile, getPublicUrl as getStoragePublicUrl } from './services/storageService.js';
+import InstagramFeedAdmin from './admin/components/InstagramFeedAdmin.js';
+import InstagramPostCardUX from './admin/components/InstagramPostCardUX.js';
+import ActionMenu from './admin/components/ActionMenu.js';
+import CollapsiblePanel from './admin/components/CollapsiblePanel.js';
 
 const AppStyle = createGlobalStyle`
   :root {
@@ -2379,346 +2383,110 @@ function AdminApp() {
           </TabRow>
 
           {activeTab === 'instagram' && (
-            <Form onSubmit={handleUpload}>
-              <Step>
-                <StepTitle>Βήμα 1. Σύρε και άφησε όλα τα αρχεία πολυμέσων</StepTitle>
-                <Dropzone
-                  $active={dragActive}
-                  $locked={orderLocked}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    if (!orderLocked) setDragActive(true);
-                  }}
-                  onDragLeave={() => setDragActive(false)}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    setDragActive(false);
-                    appendFiles(event.dataTransfer.files);
-                  }}
-                >
-                  <DropText>Ρίξε media για Feed εδώ (single post)</DropText>
-                  <FilePicker>
-                    <FilePickerButton>＋ Επιλογή αρχείων</FilePickerButton>
-                    <FileInput
-                      type="file"
-                      accept="image/*,video/*"
-                      multiple
-                      disabled={orderLocked}
-                      onChange={(event) => {
-                        appendFiles(event.target.files || []);
-                        event.target.value = '';
-                      }}
-                    />
-                  </FilePicker>
-                  <MutedSmall>{orderLocked ? 'Η σειρά είναι κλειδωμένη. Ξεκλείδωσε για αλλαγές.' : 'Μπορείς να προσθέτεις αρχεία με πολλαπλά drop.'}</MutedSmall>
-                </Dropzone>
-              </Step>
-
-              <Step>
-                <StepTitle>Βήμα 1.5. Add carousel post</StepTitle>
-                <Dropzone
-                  $active={dragActive}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    setDragActive(true);
-                  }}
-                  onDragLeave={() => setDragActive(false)}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    setDragActive(false);
-                    appendCarouselFiles(event.dataTransfer.files);
-                  }}
-                >
-                  <DropText>Ρίξε πολλαπλές εικόνες/βίντεο για 1 carousel post</DropText>
-                  <FilePicker>
-                    <FilePickerButton>＋ Add carousel post</FilePickerButton>
-                    <FileInput
-                      type="file"
-                      accept="image/*,video/*"
-                      multiple
-                      onChange={(event) => {
-                        appendCarouselFiles(event.target.files || []);
-                        event.target.value = '';
-                      }}
-                    />
-                  </FilePicker>
-                </Dropzone>
-                {carouselPosts.length > 0 && (
-                  <SlideBuilderGrid>
-                    {carouselPosts.map((carouselPost, carouselIndex) => (
-                      <SlideBuilderCard key={carouselPost.id}>
-                        <SlideBuilderHead>
-                          <strong>Carousel Post {carouselIndex + 1}</strong>
-                          <ActionButton type="button" $type="danger" onClick={() => removeCarouselPost(carouselPost.id)}>
-                            🗑 Διαγραφή carousel
-                          </ActionButton>
-                        </SlideBuilderHead>
-                        <label>
-                          Θέση στο feed (1 = πρώτο post)
-                          <InlineInput
-                            type="number"
-                            min="1"
-                            max={`${Math.max(mediaItems.length + carouselPosts.length, 1)}`}
-                            value={carouselPost.desiredPosition}
-                            onChange={(event) => updateCarouselDesiredPosition(carouselPost.id, event.target.value)}
-                          />
-                        </label>
-                        <MutedSmall>Τα slides του carousel δημοσιεύονται ως ένα post σε αυτή τη θέση.</MutedSmall>
-                        <MediaGrid>
-                          {carouselPost.items.map((item, slideIndex) => (
-                            <MediaTile key={item.id}>
-                              <MediaIndex>Carousel slide {slideIndex + 1}</MediaIndex>
-                              <MediaThumb $ratio="4 / 5">
-                                {item.kind === 'video' ? (
-                                  <video src={item.previewUrl} muted playsInline preload="metadata" />
-                                ) : (
-                                  <img src={item.previewUrl} alt={item.file.name} loading="lazy" />
-                                )}
-                              </MediaThumb>
-                              <MediaName>{item.file.name}</MediaName>
-                              <ActionButton type="button" $type="danger" onClick={() => removeCarouselMedia(carouselPost.id, item.id)}>
-                                ✕ Αφαίρεση slide
-                              </ActionButton>
-                            </MediaTile>
-                          ))}
-                        </MediaGrid>
-                      </SlideBuilderCard>
-                    ))}
-                  </SlideBuilderGrid>
-                )}
-              </Step>
-
-              <Step>
-                <StepTitle>Βήμα 2. Ορισμός σειράς αναρτήσεων και κλείδωμα τελικής θέσης</StepTitle>
-                {mediaItems.length === 0 ? (
-                  <State>Δεν υπάρχουν αρχεία ακόμα.</State>
-                ) : (
-                  <>
-                    <MediaGrid>
-                      {mediaItems.map((item, index) => (
-                        <MediaTile
-                          key={item.id}
-                          $draggable={!orderLocked}
-                          draggable={!orderLocked}
-                          onDragStart={() => setDraggedId(item.id)}
-                          onDragOver={(event) => event.preventDefault()}
-                          onDrop={() => handleTileDrop(item.id)}
-                        >
-                          <MediaIndex>Ανάρτηση {index + 1}</MediaIndex>
-                          <MediaThumb $ratio="4 / 5">
-                            {item.kind === 'video' ? (
-                              <video src={item.previewUrl} muted playsInline preload="metadata" />
-                            ) : (
-                              <img src={item.previewUrl} alt={item.file.name} loading="lazy" />
-                            )}
-                          </MediaThumb>
-                          <MediaName>{item.file.name}</MediaName>
-                          {!orderLocked && (
-                            <ActionButton type="button" $type="danger" onClick={() => removeMedia(item.id)}>
-                              ✕ Αφαίρεση
-                            </ActionButton>
-                          )}
-                        </MediaTile>
-                      ))}
-                    </MediaGrid>
-
-                    <Actions>
-                      {!orderLocked ? (
-                        <ActionButton type="button" $type="primary" onClick={() => setOrderLocked(true)}>
-                          ✓ Κλείδωμα τελικής σειράς
-                        </ActionButton>
-                      ) : (
-                        <ActionButton type="button" onClick={() => setOrderLocked(false)}>
-                          ↺ Ξεκλείδωμα σειράς
-                        </ActionButton>
-                      )}
-                      <ActionButton type="button" $type="danger" onClick={clearMedia} disabled={orderLocked}>
-                        🗑 Καθαρισμός αρχείων
-                      </ActionButton>
-                    </Actions>
-                  </>
-                )}
-              </Step>
-
-              <Step>
-                <StepTitle>Βήμα 3. Επικόλληση όλων των λεζαντών σε ένα κείμενο</StepTitle>
-                <label>
-                  Πεδίο λεζαντών
-                  <CaptionInput
-                    rows="8"
-                    value={captionsText}
-                    onChange={(event) => setCaptionsText(event.target.value)}
-                    placeholder={'Post 1: Πρώτη λεζάντα\n\nPost 2: Δεύτερη λεζάντα\n\nPost 3: Τρίτη λεζάντα'}
-                  />
-                </label>
-                <State>Αντιστοιχισμένες λεζάντες feed: {mappedCaptions}/{plannedFeedPostCount}</State>
-              </Step>
-
-              <Step>
-                <StepTitle>Βήμα 4. Ενιαία 9άδα PNG</StepTitle>
-                <Dropzone
-                  $active={dragActive}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    setDragActive(true);
-                  }}
-                  onDragLeave={() => setDragActive(false)}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    setDragActive(false);
-                    appendInstagramGridFiles(event.dataTransfer.files);
-                  }}
-                >
-                  <DropText>Ρίξε 1 αρχείο PNG για την ενιαία 9άδα</DropText>
-                  <FilePicker>
-                    <FilePickerButton>＋ Επιλογή PNG</FilePickerButton>
-                    <FileInput
-                      type="file"
-                      accept=".png,image/png"
-                      onChange={(event) => {
-                        appendInstagramGridFiles(event.target.files || []);
-                        event.target.value = '';
-                      }}
-                    />
-                  </FilePicker>
-                </Dropzone>
-                {instagramGridItems.length > 0 && (
-                  <MediaGrid>
-                    {instagramGridItems.map((item) => (
-                      <MediaTile key={item.id}>
-                        <MediaThumb $ratio="1 / 1"><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb>
-                        <MediaName>{item.file.name}</MediaName>
-                        <ActionButton type="button" $type="danger" onClick={() => setInstagramGridItems((prev) => {
-                          prev.forEach((gridItem) => URL.revokeObjectURL(gridItem.previewUrl));
-                          return [];
-                        })}>
-                          ✕ Αφαίρεση
-                        </ActionButton>
-                      </MediaTile>
-                    ))}
-                  </MediaGrid>
-                )}
-              </Step>
-
-              <Step>
-                <StepTitle>Βήμα 5. Stories αρχεία (extra input)</StepTitle>
-                <Dropzone
-                  $active={dragActive}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    setDragActive(true);
-                  }}
-                  onDragLeave={() => setDragActive(false)}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    setDragActive(false);
-                    appendInstagramStories(event.dataTransfer.files);
-                  }}
-                >
-                  <DropText>Ρίξε εικόνες/βίντεο για Stories (9:16)</DropText>
-                  <FilePicker>
-                    <FilePickerButton>＋ Επιλογή stories</FilePickerButton>
-                    <FileInput
-                      type="file"
-                      accept="image/*,video/*"
-                      multiple
-                      onChange={(event) => {
-                        appendInstagramStories(event.target.files || []);
-                        event.target.value = '';
-                      }}
-                    />
-                  </FilePicker>
-                </Dropzone>
-                {instagramStoryItems.length > 0 && (
-                  <MediaGrid>
-                    {instagramStoryItems.map((item) => (
-                      <MediaTile key={item.id}>
-                        <MediaThumb $ratio="9 / 16">
-                          {item.kind === 'video' ? (
-                            <video src={item.previewUrl} muted playsInline preload="metadata" />
-                          ) : (
-                            <img src={item.previewUrl} alt={item.file.name} loading="lazy" />
-                          )}
-                        </MediaThumb>
-                        <MediaName>{item.file.name}</MediaName>
-                        <ActionButton type="button" $type="danger" onClick={() => removeInstagramStoryItem(item.id)}>
-                          ✕ Αφαίρεση
-                        </ActionButton>
-                      </MediaTile>
-                    ))}
-                  </MediaGrid>
-                )}
-              </Step>
-
-              <Actions>
-                <ActionButton type="submit" $type="primary" disabled={busy}>
-                  {busy ? '⏳ Γίνεται ανέβασμα...' : '⬆ Ανέβασμα + Δημοσίευση τελικής σειράς'}
-                </ActionButton>
-              </Actions>
-            </Form>
+            <InstagramFeedAdmin
+              busy={busy}
+              dragActive={dragActive}
+              orderLocked={orderLocked}
+              mediaItems={mediaItems}
+              carouselPosts={carouselPosts}
+              captionsText={captionsText}
+              mappedCaptions={mappedCaptions}
+              plannedFeedPostCount={plannedFeedPostCount}
+              instagramGridItems={instagramGridItems}
+              instagramStoryItems={instagramStoryItems}
+              setDragActive={setDragActive}
+              setDraggedId={setDraggedId}
+              setCaptionsText={setCaptionsText}
+              setOrderLocked={setOrderLocked}
+              appendFiles={appendFiles}
+              appendCarouselFiles={appendCarouselFiles}
+              removeCarouselPost={removeCarouselPost}
+              updateCarouselDesiredPosition={updateCarouselDesiredPosition}
+              removeCarouselMedia={removeCarouselMedia}
+              handleTileDrop={handleTileDrop}
+              removeMedia={removeMedia}
+              clearMedia={clearMedia}
+              appendInstagramGridFiles={appendInstagramGridFiles}
+              clearInstagramGrid={() =>
+                setInstagramGridItems((prev) => {
+                  prev.forEach((gridItem) => URL.revokeObjectURL(gridItem.previewUrl));
+                  return [];
+                })
+              }
+              appendInstagramStories={appendInstagramStories}
+              removeInstagramStoryItem={removeInstagramStoryItem}
+              onSubmit={handleUpload}
+            />
           )}
 
           {activeTab === 'article' && (
             <Form onSubmit={(event) => event.preventDefault()}>
-              {articleDrafts.map((draft, index) => (
-                <Step key={draft.id}>
-                  <StepTitle>Άρθρο {index + 1}</StepTitle>
-                  <label>
-                    Τίτλος άρθρου
-                    <CaptionInput
-                      rows="2"
-                      value={draft.title}
-                      onChange={(event) => updateArticleDraftField(draft.id, 'title', event.target.value)}
-                      placeholder="Γράψε τίτλο άρθρου"
-                    />
-                  </label>
-                  <label>
-                    Κείμενο άρθρου
-                    <CaptionInput
-                      rows="8"
-                      value={draft.body}
-                      onChange={(event) => updateArticleDraftField(draft.id, 'body', event.target.value)}
-                      placeholder="Γράψε το κείμενο που θα εγκρίνει ο πελάτης"
-                    />
-                  </label>
-                  <FilePicker>
-                    <FilePickerButton>＋ Εικόνα άρθρου</FilePickerButton>
-                    <FileInput
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        setArticleDraftFile(draft.id, (event.target.files || [])[0]);
-                        event.target.value = '';
-                      }}
-                    />
-                  </FilePicker>
-                  {draft.imagePreview && (
-                    <ArticleDraftPreview>
-                      <img src={draft.imagePreview} alt={draft.title || 'Προεπισκόπηση άρθρου'} loading="lazy" />
-                    </ArticleDraftPreview>
-                  )}
-                  <Actions>
-                    <ActionButton type="button" $type="danger" onClick={() => removeArticleDraft(draft.id)}>
-                      ✕ Αφαίρεση άρθρου
-                    </ActionButton>
-                  </Actions>
-                </Step>
-              ))}
-              <Actions>
-                <ActionButton type="button" onClick={addArticleDraft}>
-                  ＋ Νέο άρθρο
-                </ActionButton>
-                <ActionButton type="button" $type="primary" disabled={busy} onClick={publishArticles}>
-                  ⬆ Δημοσίευση άρθρων
-                </ActionButton>
-              </Actions>
+              <Step>
+                <StepTitle>Primary workflow</StepTitle>
+                <State>Drafts: {articleDrafts.length}</State>
+                <Actions>
+                  <ActionButton type="button" onClick={addArticleDraft}>
+                    Νέο
+                  </ActionButton>
+                  <ActionButton type="button" $type="primary" disabled={busy} onClick={publishArticles}>
+                    Δημοσίευση
+                  </ActionButton>
+                </Actions>
+              </Step>
+
+              <CollapsiblePanel title="Drafts (Advanced)">
+                {articleDrafts.map((draft, index) => (
+                  <Step key={draft.id}>
+                    <StepTitle>Άρθρο {index + 1}</StepTitle>
+                    <label>
+                      Τίτλος
+                      <CaptionInput
+                        rows="2"
+                        value={draft.title}
+                        onChange={(event) => updateArticleDraftField(draft.id, 'title', event.target.value)}
+                        placeholder="Γράψε τίτλο άρθρου"
+                      />
+                    </label>
+                    <label>
+                      Κείμενο
+                      <CaptionInput
+                        rows="8"
+                        value={draft.body}
+                        onChange={(event) => updateArticleDraftField(draft.id, 'body', event.target.value)}
+                        placeholder="Γράψε το κείμενο που θα εγκρίνει ο πελάτης"
+                      />
+                    </label>
+                    <FilePicker>
+                      <FilePickerButton>Εικόνα</FilePickerButton>
+                      <FileInput
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) => {
+                          setArticleDraftFile(draft.id, (event.target.files || [])[0]);
+                          event.target.value = '';
+                        }}
+                      />
+                    </FilePicker>
+                    {draft.imagePreview && (
+                      <ArticleDraftPreview>
+                        <img src={draft.imagePreview} alt={draft.title || 'Προεπισκόπηση άρθρου'} loading="lazy" />
+                      </ArticleDraftPreview>
+                    )}
+                    <Actions>
+                      <ActionButton type="button" $type="danger" onClick={() => removeArticleDraft(draft.id)}>
+                        Αφαίρεση
+                      </ActionButton>
+                    </Actions>
+                  </Step>
+                ))}
+              </CollapsiblePanel>
             </Form>
           )}
 
           {activeTab === 'logo' && (
             <Form onSubmit={(event) => event.preventDefault()}>
               <Step>
-                <StepTitle>Presentation Info</StepTitle>
+                <StepTitle>Primary workflow</StepTitle>
                 <label>
                   Brand Name
                   <InlineInput
@@ -2762,6 +2530,7 @@ function AdminApp() {
                 </label>
               </Step>
 
+              <CollapsiblePanel title="Assets (Advanced)">
               <Step>
                 <StepTitle>Inspiration (Nature -> Result)</StepTitle>
                 <Dropzone
@@ -2779,7 +2548,7 @@ function AdminApp() {
                 >
                   <DropText>Inspiration image (.jpg/.jpeg/.png/.svg)</DropText>
                   <FilePicker>
-                    <FilePickerButton>＋ Inspiration image</FilePickerButton>
+                    <FilePickerButton>Inspire</FilePickerButton>
                     <FileInput
                       type="file"
                       accept="image/*"
@@ -2796,7 +2565,7 @@ function AdminApp() {
                       <MediaTile key={item.id}>
                         <MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb>
                         <MediaName>{item.file.name}</MediaName>
-                        <ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoInspirationItems, item.id)}>✕ Αφαίρεση</ActionButton>
+                        <ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoInspirationItems, item.id)}>Αφαίρεση</ActionButton>
                       </MediaTile>
                     ))}
                   </MediaGrid>
@@ -2816,7 +2585,7 @@ function AdminApp() {
                 >
                   <DropText>Result image (.png/.svg/.jpg/.jpeg)</DropText>
                   <FilePicker>
-                    <FilePickerButton>＋ Result image</FilePickerButton>
+                    <FilePickerButton>Result</FilePickerButton>
                     <FileInput
                       type="file"
                       accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg"
@@ -2831,7 +2600,7 @@ function AdminApp() {
                   <Actions>
                     {logoInspirationResultItems.map((item) => (
                       <ActionButton key={item.id} type="button" onClick={() => removeUploadItem(setLogoInspirationResultItems, item.id)}>
-                        ✕ {item.file.name}
+                        Αφαίρεση
                       </ActionButton>
                     ))}
                   </Actions>
@@ -2843,34 +2612,34 @@ function AdminApp() {
                 <MutedSmall>Main Logo / Secondary / Logomark / Variations</MutedSmall>
                 <Actions>
                   <FilePicker>
-                    <FilePickerButton>Main Logo (.png/.svg/.jpg/.jpeg)</FilePickerButton>
+                    <FilePickerButton>Main</FilePickerButton>
                     <FileInput type="file" accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg" onChange={(event) => { appendSingleImage(setLogoMainLogoItems, event.target.files || [], 'Main Logo δέχεται μόνο .png/.svg/.jpg/.jpeg'); event.target.value = ''; }} />
                   </FilePicker>
                   <FilePicker>
-                    <FilePickerButton>Secondary Logo (.png/.svg/.jpg/.jpeg)</FilePickerButton>
+                    <FilePickerButton>Secondary</FilePickerButton>
                     <FileInput type="file" accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg" onChange={(event) => { appendSingleImage(setLogoSecondaryLogoItems, event.target.files || [], 'Secondary Logo δέχεται μόνο .png/.svg/.jpg/.jpeg'); event.target.value = ''; }} />
                   </FilePicker>
                   <FilePicker>
-                    <FilePickerButton>Logomark (.png/.svg/.jpg/.jpeg)</FilePickerButton>
+                    <FilePickerButton>Logomark</FilePickerButton>
                     <FileInput type="file" accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg" onChange={(event) => { appendSingleImage(setLogoLogomarkItems, event.target.files || [], 'Logomark δέχεται μόνο .png/.svg/.jpg/.jpeg'); event.target.value = ''; }} />
                   </FilePicker>
                   <FilePicker>
-                    <FilePickerButton>Logo Variations (multiple)</FilePickerButton>
+                    <FilePickerButton>Variants</FilePickerButton>
                     <FileInput type="file" accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg" multiple onChange={(event) => { appendMultiImages(setLogoVariationItems, event.target.files || [], isPngOrSvgFile, 'Logo Variations δέχονται μόνο .png/.svg/.jpg/.jpeg'); event.target.value = ''; }} />
                   </FilePicker>
                 </Actions>
                 <MediaGrid>
                   {logoMainLogoItems.map((item) => (
-                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Main: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoMainLogoItems, item.id)}>✕</ActionButton></MediaTile>
+                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Main: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoMainLogoItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>
                   ))}
                   {logoSecondaryLogoItems.map((item) => (
-                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Secondary: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoSecondaryLogoItems, item.id)}>✕</ActionButton></MediaTile>
+                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Secondary: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoSecondaryLogoItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>
                   ))}
                   {logoLogomarkItems.map((item) => (
-                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Logomark: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoLogomarkItems, item.id)}>✕</ActionButton></MediaTile>
+                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Logomark: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoLogomarkItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>
                   ))}
                   {logoVariationItems.map((item) => (
-                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Variation: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoVariationItems, item.id)}>✕</ActionButton></MediaTile>
+                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Variation: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoVariationItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>
                   ))}
                 </MediaGrid>
               </Step>
@@ -2879,20 +2648,20 @@ function AdminApp() {
                 <StepTitle>Mascot Upload (Optional)</StepTitle>
                 <Actions>
                   <FilePicker>
-                    <FilePickerButton>Primary mascot (.png/.svg/.jpg/.jpeg)</FilePickerButton>
+                    <FilePickerButton>Mascot</FilePickerButton>
                     <FileInput type="file" accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg" onChange={(event) => { appendSingleImage(setLogoMascotPrimaryItems, event.target.files || [], 'Mascot primary δέχεται μόνο .png/.svg/.jpg/.jpeg'); event.target.value = ''; }} />
                   </FilePicker>
                   <FilePicker>
-                    <FilePickerButton>Additional mascot poses</FilePickerButton>
+                    <FilePickerButton>Poses</FilePickerButton>
                     <FileInput type="file" accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg" multiple onChange={(event) => { appendMultiImages(setLogoMascotPoseItems, event.target.files || [], isPngOrSvgFile, 'Mascot poses δέχονται μόνο .png/.svg/.jpg/.jpeg'); event.target.value = ''; }} />
                   </FilePicker>
                 </Actions>
                 <MediaGrid>
                   {logoMascotPrimaryItems.map((item) => (
-                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Mascot: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoMascotPrimaryItems, item.id)}>✕</ActionButton></MediaTile>
+                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Mascot: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoMascotPrimaryItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>
                   ))}
                   {logoMascotPoseItems.map((item) => (
-                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Pose: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoMascotPoseItems, item.id)}>✕</ActionButton></MediaTile>
+                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Pose: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoMascotPoseItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>
                   ))}
                 </MediaGrid>
               </Step>
@@ -2901,22 +2670,22 @@ function AdminApp() {
                 <StepTitle>Typography Upload</StepTitle>
                 <Actions>
                   <FilePicker>
-                    <FilePickerButton>Primary Font (.ttf/.otf)</FilePickerButton>
+                    <FilePickerButton>Primary</FilePickerButton>
                     <FileInput type="file" accept=".otf,.ttf" onChange={(event) => { appendSingleFont(setLogoPrimaryFontItems, event.target.files || []); event.target.value = ''; }} />
                   </FilePicker>
                   <FilePicker>
-                    <FilePickerButton>Secondary Font (.ttf/.otf)</FilePickerButton>
+                    <FilePickerButton>Secondary</FilePickerButton>
                     <FileInput type="file" accept=".otf,.ttf" onChange={(event) => { appendSingleFont(setLogoSecondaryFontItems, event.target.files || []); event.target.value = ''; }} />
                   </FilePicker>
                   <FilePicker>
-                    <FilePickerButton>Extra Fonts (multiple)</FilePickerButton>
+                    <FilePickerButton>Extras</FilePickerButton>
                     <FileInput type="file" accept=".otf,.ttf" multiple onChange={(event) => { appendExtraFonts(event.target.files || []); event.target.value = ''; }} />
                   </FilePicker>
                 </Actions>
                 <Actions>
-                  {logoPrimaryFontItems.map((item) => <ActionButton key={item.id} type="button" onClick={() => removeUploadItem(setLogoPrimaryFontItems, item.id)}>✕ Primary: {item.file.name}</ActionButton>)}
-                  {logoSecondaryFontItems.map((item) => <ActionButton key={item.id} type="button" onClick={() => removeUploadItem(setLogoSecondaryFontItems, item.id)}>✕ Secondary: {item.file.name}</ActionButton>)}
-                  {logoExtraFontItems.map((item) => <ActionButton key={item.id} type="button" onClick={() => removeUploadItem(setLogoExtraFontItems, item.id)}>✕ Extra: {item.file.name}</ActionButton>)}
+                  {logoPrimaryFontItems.map((item) => <ActionButton key={item.id} type="button" onClick={() => removeUploadItem(setLogoPrimaryFontItems, item.id)}>Αφαίρεση</ActionButton>)}
+                  {logoSecondaryFontItems.map((item) => <ActionButton key={item.id} type="button" onClick={() => removeUploadItem(setLogoSecondaryFontItems, item.id)}>Αφαίρεση</ActionButton>)}
+                  {logoExtraFontItems.map((item) => <ActionButton key={item.id} type="button" onClick={() => removeUploadItem(setLogoExtraFontItems, item.id)}>Αφαίρεση</ActionButton>)}
                 </Actions>
               </Step>
 
@@ -2930,13 +2699,13 @@ function AdminApp() {
                       <ColorChip key={`primary-input-${index}`} as="div">
                         <ColorSwatch $color={normalized || 'transparent'} />
                         <InlineInput value={value} onChange={(event) => updatePrimaryColorInput(index, event.target.value)} placeholder={`Primary ${index + 1}`} />
-                        <ActionButton type="button" $type="danger" onClick={() => removePrimaryColorInput(index)}>✕</ActionButton>
+                        <ActionButton type="button" $type="danger" onClick={() => removePrimaryColorInput(index)}>Αφαίρεση</ActionButton>
                       </ColorChip>
                     );
                   })}
                 </Actions>
                 <Actions>
-                  <ActionButton type="button" onClick={addPrimaryColorInput}>＋ Νέο χρώμα</ActionButton>
+                  <ActionButton type="button" onClick={addPrimaryColorInput}>Προσθήκη</ActionButton>
                 </Actions>
                 <MutedSmall>Secondary colors</MutedSmall>
                 <Actions>
@@ -2946,13 +2715,13 @@ function AdminApp() {
                       <ColorChip key={`secondary-input-${index}`} as="div">
                         <ColorSwatch $color={normalized || 'transparent'} />
                         <InlineInput value={value} onChange={(event) => updateSecondaryColorInput(index, event.target.value)} placeholder={`Secondary ${index + 1}`} />
-                        <ActionButton type="button" $type="danger" onClick={() => removeSecondaryColorInput(index)}>✕</ActionButton>
+                        <ActionButton type="button" $type="danger" onClick={() => removeSecondaryColorInput(index)}>Αφαίρεση</ActionButton>
                       </ColorChip>
                     );
                   })}
                 </Actions>
                 <Actions>
-                  <ActionButton type="button" onClick={addSecondaryColorInput}>＋ Νέο χρώμα</ActionButton>
+                  <ActionButton type="button" onClick={addSecondaryColorInput}>Προσθήκη</ActionButton>
                 </Actions>
               </Step>
 
@@ -2960,7 +2729,7 @@ function AdminApp() {
                 <StepTitle>Mockups / Applications</StepTitle>
                 <Actions>
                   <FilePicker>
-                    <FilePickerButton>Pattern files</FilePickerButton>
+                    <FilePickerButton>Pattern</FilePickerButton>
                     <FileInput type="file" accept="image/*" multiple onChange={(event) => { appendMultiImages(setLogoPatternItems, event.target.files || [], isLogoVisualFile, 'Pattern δέχεται μόνο εικόνες.'); event.target.value = ''; }} />
                   </FilePicker>
                   <FilePicker>
@@ -2973,18 +2742,19 @@ function AdminApp() {
                   </FilePicker>
                 </Actions>
                 <MediaGrid>
-                  {logoPatternItems.map((item) => (<MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Pattern: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoPatternItems, item.id)}>✕</ActionButton></MediaTile>))}
-                  {logoMockupItems.map((item) => (<MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Mockup: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoMockupItems, item.id)}>✕</ActionButton></MediaTile>))}
-                  {logoStickerItems.map((item) => (<MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Sticker: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoStickerItems, item.id)}>✕</ActionButton></MediaTile>))}
+                  {logoPatternItems.map((item) => (<MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Pattern: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoPatternItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>))}
+                  {logoMockupItems.map((item) => (<MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Mockup: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoMockupItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>))}
+                  {logoStickerItems.map((item) => (<MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Sticker: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoStickerItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>))}
                 </MediaGrid>
               </Step>
+              </CollapsiblePanel>
 
               <Actions>
                 <ActionButton type="button" $type="danger" onClick={clearLogoDraft}>
-                  🗑 Καθαρισμός logo draft
+                  Καθαρισμός
                 </ActionButton>
                 <ActionButton type="button" $type="primary" disabled={busy} onClick={publishLogoKit}>
-                  ⬆ Generate Presentation
+                  Δημοσίευση
                 </ActionButton>
               </Actions>
             </Form>
@@ -2992,10 +2762,10 @@ function AdminApp() {
 
           <Actions>
             <ActionButton type="button" disabled={!hasPublishedPosts} onClick={() => openClientPreviewTab(activeTab)}>
-              👁 Άνοιγμα προεπισκόπησης πελάτη
+              {activeTab === 'instagram' ? '👁 Άνοιγμα προεπισκόπησης πελάτη' : 'Preview'}
             </ActionButton>
             <ActionButton type="button" disabled={!hasPublishedPosts} onClick={() => copyClientShareLink(activeTab)}>
-              ⧉ Αντιγραφή share link
+              {activeTab === 'instagram' ? '⧉ Αντιγραφή share link' : 'Link'}
             </ActionButton>
           </Actions>
 
@@ -3008,7 +2778,7 @@ function AdminApp() {
           <ListHeader>
             <ListTitle>{CONTENT_TABS[activeTab]}: Όλα τα στοιχεία</ListTitle>
             <ActionButton type="button" $type="danger" onClick={deleteAllPostsPermanently} disabled={busy || scopedReviewItems.length === 0}>
-              🗑 Οριστική διαγραφή tab
+              {activeTab === 'instagram' ? '🗑 Οριστική διαγραφή tab' : 'Διαγραφή'}
             </ActionButton>
           </ListHeader>
 
@@ -3049,9 +2819,18 @@ function AdminApp() {
                   <ReviewPill $state={postReviewStatus(kit)}>
                     {postReviewLabel(postReviewStatus(kit))}
                   </ReviewPill>
-                  <ActionButton type="button" $type="danger" onClick={() => deleteLogoKitPermanently(kit)} disabled={busy}>
-                    ✕ Οριστική διαγραφή
-                  </ActionButton>
+                  <ActionMenu
+                    label="More"
+                    actions={[
+                      {
+                        key: `delete-kit-${kit.id}`,
+                        label: 'Διαγραφή',
+                        type: 'danger',
+                        disabled: busy,
+                        onClick: () => deleteLogoKitPermanently(kit)
+                      }
+                    ]}
+                  />
                 </RowActions>
               </Row>
             ))
@@ -3061,6 +2840,42 @@ function AdminApp() {
             scopedPosts.map((post) => {
               const instagramMeta = activeTab === 'instagram' ? instagramEntryMeta(post) : null;
               const isInstagramStory = instagramMeta?.kind === 'story';
+              if (activeTab === 'instagram') {
+                const mediaPreview = replacementFiles[post.id] && isVideoFile(replacementFiles[post.id]) ? (
+                  <video src={replacementPreviews[post.id]} muted playsInline preload="metadata" />
+                ) : replacementFiles[post.id] ? (
+                  <img src={replacementPreviews[post.id]} alt={replacementFiles[post.id].name} loading="lazy" />
+                ) : isVideoPost(post) ? (
+                  <video src={replacementPreviews[post.id] || post.image_url} muted playsInline preload="metadata" />
+                ) : (replacementPreviews[post.id] || post.image_url) ? (
+                  <img src={replacementPreviews[post.id] || post.image_url} alt={post.title} loading="lazy" />
+                ) : (
+                  <MutedSmall>Χωρίς εικόνα</MutedSmall>
+                );
+
+                return (
+                  <InstagramPostCardUX
+                    key={post.id}
+                    post={post}
+                    instagramMeta={instagramMeta}
+                    isInstagramStory={isInstagramStory}
+                    busy={busy}
+                    mediaPreview={mediaPreview}
+                    title={instagramMeta?.fileName || stripPostTypePrefix(post.title)}
+                    createdAtText={formatDate(post.created_at)}
+                    reviewLabel={postReviewLabel(postReviewStatus(post))}
+                    publishStatus={post.status}
+                    approvalStatus={post.approval_status}
+                    captionValue={captionDrafts[post.id] ?? post.caption}
+                    onCaptionChange={(value) => handleCaptionDraft(post.id, value)}
+                    onReplaceMedia={(file) => handleReplacementSelect(post, file)}
+                    onSaveEdits={() => savePostEdits(post)}
+                    onDelete={() => deletePostPermanently(post)}
+                    clientNotes={post.client_notes}
+                  />
+                );
+              }
+
               return (
               <Row key={post.id}>
                 <RowMain>
@@ -3105,66 +2920,80 @@ function AdminApp() {
                     <RowText><strong>Story:</strong> Η προεπισκόπηση story δεν εμφανίζει λεζάντα.</RowText>
                   )}
 
-                  <EditActions>
-                    <MediaUploadLabel htmlFor={`replace-${post.id}`}>
-                      ↻ Αντικατάσταση media
-                    </MediaUploadLabel>
-                    <HiddenFileInput
-                      id={`replace-${post.id}`}
-                      type="file"
-                      accept="image/*,video/*"
-                      onChange={(event) => {
-                        const file = (event.target.files || [])[0];
-                        handleReplacementSelect(post, file);
-                        event.target.value = '';
-                      }}
-                    />
+                  <Actions>
                     <ActionButton type="button" $type="primary" disabled={busy} onClick={() => savePostEdits(post)}>
-                      💾 Αποθήκευση αλλαγών
+                      Αποθήκευση
                     </ActionButton>
-                  </EditActions>
+                    <ActionMenu
+                      label="More"
+                      actions={[
+                        {
+                          key: `delete-${post.id}`,
+                          label: 'Διαγραφή',
+                          type: 'danger',
+                          disabled: busy,
+                          onClick: () => deletePostPermanently(post)
+                        }
+                      ]}
+                    />
+                  </Actions>
 
-                  {activeTab === 'article' ? (
-                    <>
-                      <EditLabel>Ιστορικό αλλαγών πελάτη</EditLabel>
-                      {(post.client_notes || '').trim().length > 0 ? (
-                        <ChangeHistoryWrap>
-                          {buildArticleChanges(post.caption, post.client_notes).length === 0 ? (
-                            <ChangeLine>Δεν υπάρχουν διαφορές παραγράφων.</ChangeLine>
-                          ) : (
-                            buildArticleChanges(post.caption, post.client_notes).map((change, changeIndex) => (
-                              <ChangeLine key={`${post.id}-${change.type}-${changeIndex}`}>
-                                {change.type === 'added' ? 'Added: ' : 'Removed: '}
-                                {change.paragraph}
-                              </ChangeLine>
-                            ))
-                          )}
-                        </ChangeHistoryWrap>
-                      ) : (
-                        <RowText>Δεν υπάρχουν αλλαγές πελάτη ακόμα.</RowText>
-                      )}
-                      {(post.client_notes || '').trim().length > 0 && (
-                        <Actions>
-                          <ActionButton type="button" onClick={() => copyClientArticleText(post)}>
-                            ⧉ Copy Άρθρου πελάτη
-                          </ActionButton>
-                          <ActionButton type="button" $type="primary" disabled={busy} onClick={() => applyClientArticleEdits(post)}>
-                            ✓ Εφαρμογή κειμένου πελάτη και δημοσίευση
-                          </ActionButton>
-                        </Actions>
-                      )}
-                    </>
-                  ) : (
-                    <RowText><strong>Σημειώσεις πελάτη:</strong> {(post.client_notes || '').trim() || 'Δεν υπάρχουν σημειώσεις ακόμα.'}</RowText>
-                  )}
+                  <CollapsiblePanel title="Advanced">
+                    <EditActions>
+                      <MediaUploadLabel htmlFor={`replace-${post.id}`}>
+                        Αντικατάσταση
+                      </MediaUploadLabel>
+                      <HiddenFileInput
+                        id={`replace-${post.id}`}
+                        type="file"
+                        accept="image/*,video/*"
+                        onChange={(event) => {
+                          const file = (event.target.files || [])[0];
+                          handleReplacementSelect(post, file);
+                          event.target.value = '';
+                        }}
+                      />
+                    </EditActions>
+
+                    {activeTab === 'article' ? (
+                      <>
+                        <EditLabel>Ιστορικό</EditLabel>
+                        {(post.client_notes || '').trim().length > 0 ? (
+                          <ChangeHistoryWrap>
+                            {buildArticleChanges(post.caption, post.client_notes).length === 0 ? (
+                              <ChangeLine>Δεν υπάρχουν διαφορές παραγράφων.</ChangeLine>
+                            ) : (
+                              buildArticleChanges(post.caption, post.client_notes).map((change, changeIndex) => (
+                                <ChangeLine key={`${post.id}-${change.type}-${changeIndex}`}>
+                                  {change.type === 'added' ? 'Added: ' : 'Removed: '}
+                                  {change.paragraph}
+                                </ChangeLine>
+                              ))
+                            )}
+                          </ChangeHistoryWrap>
+                        ) : (
+                          <RowText>Δεν υπάρχουν αλλαγές πελάτη ακόμα.</RowText>
+                        )}
+                        {(post.client_notes || '').trim().length > 0 && (
+                          <Actions>
+                            <ActionButton type="button" onClick={() => copyClientArticleText(post)}>
+                              Αντιγραφή
+                            </ActionButton>
+                            <ActionButton type="button" $type="primary" disabled={busy} onClick={() => applyClientArticleEdits(post)}>
+                              Εφαρμογή
+                            </ActionButton>
+                          </Actions>
+                        )}
+                      </>
+                    ) : (
+                      <RowText><strong>Σημειώσεις πελάτη:</strong> {(post.client_notes || '').trim() || 'Δεν υπάρχουν σημειώσεις ακόμα.'}</RowText>
+                    )}
+                  </CollapsiblePanel>
                 </RowMain>
                 <RowActions>
                   <ReviewPill $state={postReviewStatus(post)}>
                     {postReviewLabel(postReviewStatus(post))}
                   </ReviewPill>
-                  <ActionButton type="button" $type="danger" onClick={() => deletePostPermanently(post)} disabled={busy}>
-                    ✕ Οριστική διαγραφή
-                  </ActionButton>
                 </RowActions>
               </Row>
             );
