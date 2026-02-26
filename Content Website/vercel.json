@@ -1,4 +1,24 @@
 {
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/", "destination": "/public/portal.html" },
+    { "source": "/portal", "destination": "/public/portal.html" },
+    { "source": "/admin", "destination": "/public/admin.html" },
+    { "source": "/index", "destination": "/public/index.html" },
+    { "source": "/portal.html", "destination": "/public/portal.html" },
+    { "source": "/admin.html", "destination": "/public/admin.html" },
+    { "source": "/index.html", "destination": "/public/index.html" },
+    { "source": "/portal.js", "destination": "/public/portal.js" },
+    { "source": "/admin.js", "destination": "/public/admin.js" },
+    { "source": "/app.js", "destination": "/public/app.js" },
+    { "source": "/config.js", "destination": "/public/config.js" },
+    { "source": "/admin/(.*)", "destination": "/public/admin/$1" },
+    { "source": "/api/(.*)", "destination": "/public/api/$1" },
+    { "source": "/components/(.*)", "destination": "/public/components/$1" },
+    { "source": "/core/(.*)", "destination": "/public/core/$1" },
+    { "source": "/hooks/(.*)", "destination": "/public/hooks/$1" },
+    { "source": "/services/(.*)", "destination": "/public/services/$1" },
+    { "source": "/utils/(.*)", "destination": "/public/utils/$1" }
+  ]
 }
