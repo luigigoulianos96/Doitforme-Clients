@@ -279,6 +279,7 @@ const Media = styled.div`
   border-top: 1px solid color-mix(in srgb, var(--greyDark) 16%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--greyDark) 16%, transparent);
   background: color-mix(in srgb, var(--white) 98%, transparent);
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -320,12 +321,13 @@ const LikesLine = styled.div`
 
 const CarouselControls = styled.div`
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0.7rem;
+  left: 0.5rem;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 0.5rem;
 `;
 
