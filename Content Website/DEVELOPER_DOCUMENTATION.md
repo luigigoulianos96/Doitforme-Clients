@@ -91,11 +91,8 @@ flowchart LR
   - `public/components/cards/PostCard.js`
   - `public/components/logo/LogoKitPresentation.js`
 - Common mistakes:
-  - editing duplicate/unreferenced files:
-    - `public/components/PostCard.js`
-    - `public/components/LogoKitPresentation.js`
-    - `public/components/CaptionBlock.js`
-  - while runtime imports use `public/components/cards/*` and `public/components/logo/*`.
+  - editing `public/components/CaptionBlock.js` expecting runtime effect in preview flow.
+  - runtime imports use `public/components/cards/*` and `public/components/logo/*`.
 
 ### `public/hooks/`
 - Purpose: preview-page data and derived-state logic.
@@ -141,11 +138,11 @@ flowchart LR
 - Example:
   - `supabase/schema.sql`.
 
-### `src/`
-- Current status: legacy/non-runtime for deployed entrypoints.
-- Why: production HTML entrypoints in `public/*.html` do not import `src/*`.
+### `_archive/src-legacy-2026-02-26/`
+- Current status: archived legacy snapshot, non-runtime.
+- Why: production HTML entrypoints in `public/*.html` do not import archived files.
 - Common mistakes:
-  - editing `src/*` expecting production behavior changes.
+  - editing archived files expecting production behavior changes.
 
 ### Component structure philosophy
 - `public/app.js` composes small sections and injects `PostCard`/`LogoKitPresentation`.
@@ -267,7 +264,7 @@ flowchart LR
   - add derived projection in `public/hooks/usePreviewComputed.js`.
 - DON'T:
   - add direct `.from('posts')` call inside `public/components/sections/InstagramPreviewSection.js`.
-  - edit `public/components/PostCard.js` when runtime imports `public/components/cards/PostCard.js`.
+  - add business logic directly inside render-only section components.
 
 ## 5. Feature Development Guide (CRITICAL SECTION)
 
@@ -327,8 +324,7 @@ flowchart LR
   - one storage upload/remove if feature touches files.
 
 7. Mistakes to avoid
-- Editing `src/*` expecting runtime effect.
-- Editing duplicate unused component files in `public/components/` root.
+- Editing `_archive/src-legacy-2026-02-26/*` expecting runtime effect.
 - Adding new imports without corresponding `vercel.json` rewrite if accessed from root path.
 - Returning altered data shapes that break existing UI assumptions.
 
@@ -459,7 +455,7 @@ flowchart LR
 
 ### Bundle optimization suggestions (non-breaking)
 - Move admin helper logic to imported module files to reduce first-parse burden of `admin.js`.
-- Remove duplicate unused files in `public/components/` root to reduce confusion and accidental imports.
+- Remove or archive any future unreferenced `public/components/*` files to reduce confusion and accidental imports.
 - Consider prebuilding (instead of runtime Babel transform) for faster startup and fewer runtime parse costs.
 
 ## 10. Technical Debt & Improvement Suggestions
@@ -467,9 +463,7 @@ flowchart LR
 ### Code smells
 - Monolith files:
   - `public/admin.js` and `public/portal.js` combine UI, queries, mutations, formatting, and styles.
-- Duplicated files:
-  - `public/components/PostCard.js` vs `public/components/cards/PostCard.js`
-  - `public/components/LogoKitPresentation.js` vs `public/components/logo/LogoKitPresentation.js`.
+- Legacy archive exists in `_archive/src-legacy-2026-02-26/`; it should not diverge from runtime assumptions.
 
 ### Repetition
 - Supabase client creation repeated in multiple entry files.
@@ -495,7 +489,7 @@ flowchart LR
 
 ### 15 rules I must follow
 1. Treat `public/*.html` as production entrypoints.
-2. Make behavior changes in `public/*`, not `src/*`.
+2. Make behavior changes in `public/*`, not `_archive/*`.
 3. Confirm route rewrites in `vercel.json` for any new top-level path.
 4. Keep preview fetch logic in `public/hooks/usePreviewData.js`.
 5. Keep preview derived logic in `public/hooks/usePreviewComputed.js`.
@@ -512,13 +506,13 @@ flowchart LR
 
 ### 10 red flags I must avoid
 1. Adding direct table calls inside render-only section components.
-2. Editing duplicate unused component files.
+2. Editing archived files expecting runtime impact.
 3. Changing query param names (`client`, `mode`) without full link-flow update.
 4. Breaking title prefix conventions (`[IG]`, `[ARTICLE]`, `[LOGO]`) used by parsing.
 5. Removing `client_id` filters from admin/preview queries.
 6. Changing approval status string values (`pending`, `approved`, `disapproved`).
 7. Shipping without checking Vercel rewrites.
-8. Relying on `src/*` for production behavior.
+8. Relying on `_archive/src-legacy-2026-02-26/*` for production behavior.
 9. Ignoring storage cleanup when deleting DB records with file paths.
 10. Changing return object shape from hooks without updating consuming sections.
 
@@ -533,4 +527,3 @@ flowchart LR
 8. Section-based composition in `public/app.js`.
 9. Storage upload then DB insert pattern in admin publish flows.
 10. Defensive cleanup of object URLs in `useEffect` cleanup blocks.
-
