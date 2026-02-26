@@ -869,7 +869,7 @@ function AdminApp() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mediaItems, setMediaItems] = useState([]);
-  const [carouselMediaItems, setCarouselMediaItems] = useState([]);
+  const [carouselPosts, setCarouselPosts] = useState([]);
   const [instagramGridItems, setInstagramGridItems] = useState([]);
   const [instagramStoryItems, setInstagramStoryItems] = useState([]);
   const [dragActive, setDragActive] = useState(false);
@@ -957,7 +957,7 @@ function AdminApp() {
         if (draft.imagePreview) URL.revokeObjectURL(draft.imagePreview);
       });
       [
-        carouselMediaItems,
+        carouselPosts.flatMap((carouselPost) => carouselPost.items),
         instagramGridItems,
         instagramStoryItems,
         logoInspirationItems,
@@ -980,7 +980,7 @@ function AdminApp() {
     };
   }, [
     articleDrafts,
-    carouselMediaItems,
+    carouselPosts,
     instagramGridItems,
     instagramStoryItems,
     logoInspirationItems,
@@ -1118,16 +1118,56 @@ function AdminApp() {
       return;
     }
     const nextItems = createMediaItems(validFiles);
-    setCarouselMediaItems((prev) => [...prev, ...nextItems]);
-    setStatus(`Προστέθηκαν ${nextItems.length} αρχεία στο carousel.`);
+    setCarouselPosts((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-carousel-${Math.random().toString(36).slice(2, 8)}`,
+        desiredPosition: mediaItems.length + prev.length + 1,
+        items: nextItems
+      }
+    ]);
+    setStatus(`Δημιουργήθηκε carousel post με ${nextItems.length} slides.`);
   }
 
-  function removeCarouselMedia(itemId) {
-    setCarouselMediaItems((prev) => {
-      const found = prev.find((item) => item.id === itemId);
-      if (found?.previewUrl) URL.revokeObjectURL(found.previewUrl);
-      return prev.filter((item) => item.id !== itemId);
+  function removeCarouselMedia(carouselId, itemId) {
+    setCarouselPosts((prev) => {
+      const targetCarousel = prev.find((carouselPost) => carouselPost.id === carouselId);
+      const targetItem = targetCarousel?.items.find((item) => item.id === itemId);
+      if (targetItem?.previewUrl) URL.revokeObjectURL(targetItem.previewUrl);
+
+      const next = prev
+        .map((carouselPost) =>
+          carouselPost.id === carouselId
+            ? { ...carouselPost, items: carouselPost.items.filter((item) => item.id !== itemId) }
+            : carouselPost
+        )
+        .filter((carouselPost) => carouselPost.items.length > 0);
+
+      return next;
     });
+  }
+
+  function removeCarouselPost(carouselId) {
+    setCarouselPosts((prev) => {
+      const targetCarousel = prev.find((carouselPost) => carouselPost.id === carouselId);
+      if (targetCarousel) {
+        targetCarousel.items.forEach((item) => {
+          if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        });
+      }
+      return prev.filter((carouselPost) => carouselPost.id !== carouselId);
+    });
+  }
+
+  function updateCarouselDesiredPosition(carouselId, value) {
+    const maxPosition = mediaItems.length + carouselPosts.length;
+    const parsed = Number(value);
+    const nextValue = Math.min(Math.max(Number.isFinite(parsed) ? parsed : 1, 1), Math.max(maxPosition, 1));
+    setCarouselPosts((prev) =>
+      prev.map((carouselPost) =>
+        carouselPost.id === carouselId ? { ...carouselPost, desiredPosition: nextValue } : carouselPost
+      )
+    );
   }
 
   function appendInstagramStories(files) {
@@ -1704,7 +1744,7 @@ function AdminApp() {
     const clientScope = await validateSelectedClientScope();
     if (!clientScope.ok) return;
 
-    const totalUploads = mediaItems.length + carouselMediaItems.length + instagramStoryItems.length + instagramGridItems.length;
+    const totalUploads = mediaItems.length + carouselSlideCount + instagramStoryItems.length + instagramGridItems.length;
     if (totalUploads === 0) {
       setStatus('Βήμα 1: Ανέβασε τουλάχιστον ένα feed post, carousel, story ή png 9άδας.');
       return;
@@ -1724,54 +1764,27 @@ function AdminApp() {
     const bucket = (window.APP_CONFIG && window.APP_CONFIG.STORAGE_BUCKET) || 'post-photos';
 
     const dynamicUsername = (selectedClient?.slug || selectedClient?.name || '').trim();
+    const feedPublishItems = mediaItems.map((item, index) => ({
+      kind: 'single',
+      item,
+      sourceIndex: index
+    }));
+    carouselPosts.forEach((carouselPost) => {
+      const rawPosition = Number(carouselPost.desiredPosition) || feedPublishItems.length + 1;
+      const safeIndex = Math.max(Math.min(rawPosition - 1, feedPublishItems.length), 0);
+      feedPublishItems.splice(safeIndex, 0, {
+        kind: 'carousel',
+        carouselPost
+      });
+    });
+
     let sortOrderCursor = nextSortOrderStart;
-    for (let i = 0; i < mediaItems.length; i += 1) {
-      const item = mediaItems[i];
-      const file = item.file;
-      const fileName = `${Date.now()}-${i}-${slugFilename(file.name)}`;
-      const path = `${session.user.id}/${fileName}`;
+    for (let feedIndex = 0; feedIndex < feedPublishItems.length; feedIndex += 1) {
+      const feedItem = feedPublishItems[feedIndex];
 
-      const { error: uploadError } = await client.storage
-        .from(bucket)
-        .upload(path, file, { cacheControl: '3600', upsert: false });
-
-      if (uploadError) {
-        setStatus(`Σφάλμα upload (${file.name}): ${uploadError.message}`);
-        setBusy(false);
-        return;
-      }
-
-      const { data: publicData } = client.storage.from(bucket).getPublicUrl(path);
-
-      const payload = {
-        title: makeTypedTitle('instagram', `SINGLE::${file.name}`),
-        image_url: publicData.publicUrl,
-        image_path: path,
-        caption: captions[i] || `Post ${sortOrderCursor}: Η λεζάντα εκκρεμεί.`,
-        client_id: clientScope.value.id,
-        status: 'published',
-        approval_status: 'pending',
-        client_notes: '',
-        username: dynamicUsername,
-        like_count: 160 + i * 20,
-        sort_order: sortOrderCursor
-      };
-
-      const { error: insertError } = await client.from('posts').insert(payload);
-      if (insertError) {
-        setStatus(`Σφάλμα βάσης (${file.name}): ${insertError.message}`);
-        setBusy(false);
-        return;
-      }
-      sortOrderCursor += 1;
-    }
-
-    if (carouselMediaItems.length > 0) {
-      const carouselGroupId = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      for (let i = 0; i < carouselMediaItems.length; i += 1) {
-        const item = carouselMediaItems[i];
-        const file = item.file;
-        const fileName = `${Date.now()}-carousel-${i}-${slugFilename(file.name)}`;
+      if (feedItem.kind === 'single') {
+        const file = feedItem.item.file;
+        const fileName = `${Date.now()}-single-${feedIndex}-${slugFilename(file.name)}`;
         const path = `${session.user.id}/${fileName}`;
 
         const { error: uploadError } = await client.storage
@@ -1785,29 +1798,71 @@ function AdminApp() {
         }
 
         const { data: publicData } = client.storage.from(bucket).getPublicUrl(path);
-
         const payload = {
-          title: makeTypedTitle('instagram', `CAROUSEL::${carouselGroupId}::${i + 1}::${file.name}`),
+          title: makeTypedTitle('instagram', `SINGLE::${file.name}`),
           image_url: publicData.publicUrl,
           image_path: path,
-          caption: captions[mediaItems.length] || `Carousel ${sortOrderCursor}: Η λεζάντα εκκρεμεί.`,
+          caption: captions[feedIndex] || `Post ${feedIndex + 1}: Η λεζάντα εκκρεμεί.`,
           client_id: clientScope.value.id,
           status: 'published',
           approval_status: 'pending',
           client_notes: '',
           username: dynamicUsername,
-          like_count: 160,
+          like_count: 160 + feedItem.sourceIndex * 20,
           sort_order: sortOrderCursor
         };
-
         const { error: insertError } = await client.from('posts').insert(payload);
         if (insertError) {
           setStatus(`Σφάλμα βάσης (${file.name}): ${insertError.message}`);
           setBusy(false);
           return;
         }
+        sortOrderCursor += 1;
       }
-      sortOrderCursor += 1;
+
+      if (feedItem.kind === 'carousel') {
+        const carouselGroupId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const carouselCaption = captions[feedIndex] || `Carousel ${feedIndex + 1}: Η λεζάντα εκκρεμεί.`;
+
+        for (let slideIndex = 0; slideIndex < feedItem.carouselPost.items.length; slideIndex += 1) {
+          const slide = feedItem.carouselPost.items[slideIndex];
+          const file = slide.file;
+          const fileName = `${Date.now()}-carousel-${feedIndex}-${slideIndex}-${slugFilename(file.name)}`;
+          const path = `${session.user.id}/${fileName}`;
+
+          const { error: uploadError } = await client.storage
+            .from(bucket)
+            .upload(path, file, { cacheControl: '3600', upsert: false });
+
+          if (uploadError) {
+            setStatus(`Σφάλμα upload (${file.name}): ${uploadError.message}`);
+            setBusy(false);
+            return;
+          }
+
+          const { data: publicData } = client.storage.from(bucket).getPublicUrl(path);
+          const payload = {
+            title: makeTypedTitle('instagram', `CAROUSEL::${carouselGroupId}::${slideIndex + 1}::${file.name}`),
+            image_url: publicData.publicUrl,
+            image_path: path,
+            caption: carouselCaption,
+            client_id: clientScope.value.id,
+            status: 'published',
+            approval_status: 'pending',
+            client_notes: '',
+            username: dynamicUsername,
+            like_count: 160,
+            sort_order: sortOrderCursor
+          };
+          const { error: insertError } = await client.from('posts').insert(payload);
+          if (insertError) {
+            setStatus(`Σφάλμα βάσης (${file.name}): ${insertError.message}`);
+            setBusy(false);
+            return;
+          }
+        }
+        sortOrderCursor += 1;
+      }
     }
 
     for (let i = 0; i < instagramStoryItems.length; i += 1) {
@@ -1883,16 +1938,18 @@ function AdminApp() {
     }
 
     mediaItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    carouselMediaItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    carouselPosts.forEach((carouselPost) => {
+      carouselPost.items.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    });
     instagramStoryItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
     instagramGridItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
     setMediaItems([]);
-    setCarouselMediaItems([]);
+    setCarouselPosts([]);
     setInstagramStoryItems([]);
     setInstagramGridItems([]);
     setOrderLocked(false);
     setCaptionsText('');
-    setStatus(`Ολοκληρώθηκε. Ανέβηκαν ${mediaItems.length} single, ${carouselMediaItems.length} carousel slides, ${instagramStoryItems.length} stories.`);
+    setStatus(`Ολοκληρώθηκε. Ανέβηκαν ${mediaItems.length} single, ${carouselPosts.length} carousel posts (${carouselSlideCount} slides), ${instagramStoryItems.length} stories.`);
     await loadPosts();
     setBusy(false);
   }
@@ -2207,10 +2264,9 @@ function AdminApp() {
   }
 
   const parsedCaptions = useMemo(() => parseCaptions(captionsText), [captionsText]);
-  const mappedCaptions = useMemo(
-    () => mediaItems.reduce((sum, _item, index) => sum + (parsedCaptions[index] ? 1 : 0), 0),
-    [mediaItems, parsedCaptions]
-  );
+  const plannedFeedPostCount = mediaItems.length + carouselPosts.length;
+  const carouselSlideCount = carouselPosts.reduce((sum, carouselPost) => sum + carouselPost.items.length, 0);
+  const mappedCaptions = Array.from({ length: plannedFeedPostCount }).reduce((sum, _item, index) => sum + (parsedCaptions[index] ? 1 : 0), 0);
   const scopedPosts = useMemo(
     () => posts.filter((post) => parsePostType(post) === activeTab),
     [posts, activeTab]
@@ -2376,25 +2432,48 @@ function AdminApp() {
                     />
                   </FilePicker>
                 </Dropzone>
-                {carouselMediaItems.length > 0 && (
-                  <MediaGrid>
-                    {carouselMediaItems.map((item, index) => (
-                      <MediaTile key={item.id}>
-                        <MediaIndex>Carousel slide {index + 1}</MediaIndex>
-                        <MediaThumb $ratio="4 / 5">
-                          {item.kind === 'video' ? (
-                            <video src={item.previewUrl} muted playsInline preload="metadata" />
-                          ) : (
-                            <img src={item.previewUrl} alt={item.file.name} loading="lazy" />
-                          )}
-                        </MediaThumb>
-                        <MediaName>{item.file.name}</MediaName>
-                        <ActionButton type="button" $type="danger" onClick={() => removeCarouselMedia(item.id)}>
-                          ✕ Αφαίρεση
-                        </ActionButton>
-                      </MediaTile>
+                {carouselPosts.length > 0 && (
+                  <SlideBuilderGrid>
+                    {carouselPosts.map((carouselPost, carouselIndex) => (
+                      <SlideBuilderCard key={carouselPost.id}>
+                        <SlideBuilderHead>
+                          <strong>Carousel Post {carouselIndex + 1}</strong>
+                          <ActionButton type="button" $type="danger" onClick={() => removeCarouselPost(carouselPost.id)}>
+                            🗑 Διαγραφή carousel
+                          </ActionButton>
+                        </SlideBuilderHead>
+                        <label>
+                          Θέση στο feed (1 = πρώτο post)
+                          <InlineInput
+                            type="number"
+                            min="1"
+                            max={`${Math.max(mediaItems.length + carouselPosts.length, 1)}`}
+                            value={carouselPost.desiredPosition}
+                            onChange={(event) => updateCarouselDesiredPosition(carouselPost.id, event.target.value)}
+                          />
+                        </label>
+                        <MutedSmall>Τα slides του carousel δημοσιεύονται ως ένα post σε αυτή τη θέση.</MutedSmall>
+                        <MediaGrid>
+                          {carouselPost.items.map((item, slideIndex) => (
+                            <MediaTile key={item.id}>
+                              <MediaIndex>Carousel slide {slideIndex + 1}</MediaIndex>
+                              <MediaThumb $ratio="4 / 5">
+                                {item.kind === 'video' ? (
+                                  <video src={item.previewUrl} muted playsInline preload="metadata" />
+                                ) : (
+                                  <img src={item.previewUrl} alt={item.file.name} loading="lazy" />
+                                )}
+                              </MediaThumb>
+                              <MediaName>{item.file.name}</MediaName>
+                              <ActionButton type="button" $type="danger" onClick={() => removeCarouselMedia(carouselPost.id, item.id)}>
+                                ✕ Αφαίρεση slide
+                              </ActionButton>
+                            </MediaTile>
+                          ))}
+                        </MediaGrid>
+                      </SlideBuilderCard>
                     ))}
-                  </MediaGrid>
+                  </SlideBuilderGrid>
                 )}
               </Step>
 
@@ -2461,7 +2540,7 @@ function AdminApp() {
                     placeholder={'Post 1: Πρώτη λεζάντα\n\nPost 2: Δεύτερη λεζάντα\n\nPost 3: Τρίτη λεζάντα'}
                   />
                 </label>
-                <State>Αντιστοιχισμένες λεζάντες: {mappedCaptions}/{mediaItems.length}</State>
+                <State>Αντιστοιχισμένες λεζάντες feed: {mappedCaptions}/{plannedFeedPostCount}</State>
               </Step>
 
               <Step>

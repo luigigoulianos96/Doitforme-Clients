@@ -49,11 +49,27 @@ const resolve_local_path = (requestPath) => {
     '/': '/public/portal.html',
     '/portal': '/public/portal.html',
     '/portal.html': '/public/portal.html',
+    '/portal.js': '/public/portal.js',
+    '/app.js': '/public/app.js',
+    '/admin.js': '/public/admin.js',
+    '/config.js': '/public/config.js',
     '/index.html': '/public/index.html',
     '/admin.html': '/public/admin.html'
   };
 
-  const mappedPath = pathMap[requestPath] || requestPath;
+  const publicPrefixMap = [
+    ['/admin/', '/public/admin/'],
+    ['/api/', '/public/api/'],
+    ['/components/', '/public/components/'],
+    ['/core/', '/public/core/'],
+    ['/hooks/', '/public/hooks/'],
+    ['/services/', '/public/services/'],
+    ['/utils/', '/public/utils/']
+  ];
+  const mappedPrefix = publicPrefixMap.find(([fromPrefix]) => requestPath.startsWith(fromPrefix));
+  const mappedPath = mappedPrefix
+    ? requestPath.replace(mappedPrefix[0], mappedPrefix[1])
+    : (pathMap[requestPath] || requestPath);
   const normalized = path.normalize(mappedPath).replace(/^([.][./\\])+/, '');
   const withoutLeadingSlash = normalized.replace(/^[/\\]+/, '');
   return path.join(ROOT_DIR, withoutLeadingSlash);
