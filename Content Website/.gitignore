@@ -1,2 +1,5 @@
 public/config.js
 .DS_Store
+.env
+.env.*
+!.env.example

@@ -84,6 +84,8 @@ function getPublicUrl(path) {
   if (!path) return '';
   const { baseUrl, bucket } = getConfig();
   const cleanPath = `${path}`.replace(/^\/+/, '');
+  requireValue(baseUrl, 'MINIO_BASE_URL');
+  requireValue(bucket, 'MINIO_BUCKET');
   return `${baseUrl}/${bucket}/${cleanPath}`;
 }
 

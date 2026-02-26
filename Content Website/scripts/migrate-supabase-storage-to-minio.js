@@ -5,6 +5,7 @@ const {
   PutObjectCommand,
   HeadObjectCommand
 } = require('@aws-sdk/client-s3');
+require('./load-env');
 
 const SUPABASE_URL = `${process.env.SUPABASE_URL || ''}`.trim().replace(/\/+$/, '');
 const SUPABASE_KEY = `${process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ''}`.trim();

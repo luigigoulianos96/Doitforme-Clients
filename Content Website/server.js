@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+require('./scripts/load-env');
 const { S3Client, DeleteObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
@@ -227,8 +228,9 @@ const resolve_local_path = (requestPath) => {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+  const normalizedPath = url.pathname.replace(/\/+$/, '') || '/';
 
-  if (url.pathname === STORAGE_UPLOAD_ROUTE || url.pathname === STORAGE_DELETE_ROUTE) {
+  if (normalizedPath === STORAGE_UPLOAD_ROUTE || normalizedPath === STORAGE_DELETE_ROUTE) {
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
         'Access-Control-Allow-Origin': '*',
@@ -245,7 +247,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (url.pathname === STORAGE_UPLOAD_ROUTE) {
+    if (normalizedPath === STORAGE_UPLOAD_ROUTE) {
       await handle_storage_presign_upload(req, res);
       return;
     }

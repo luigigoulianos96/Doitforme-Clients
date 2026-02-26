@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+require('./load-env');
+
 const SUPABASE_URL = `${process.env.SUPABASE_URL || ''}`.trim().replace(/\/+$/, '');
 const SUPABASE_KEY = `${process.env.SUPABASE_SERVICE_ROLE_KEY || ''}`.trim();
 const MINIO_BASE_URL = `${process.env.MINIO_HOST || process.env.MINIO_BASE_URL || ''}`.trim().replace(/\/+$/, '');

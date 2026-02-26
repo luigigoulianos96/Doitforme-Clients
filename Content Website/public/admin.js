@@ -460,7 +460,12 @@ const ActionButton = styled.button`
 
 const State = styled.p`
   margin-top: 14px;
-  color: ${(p) => (p.$error ? 'var(--danger)' : 'var(--muted)')};
+  color: ${(p) => {
+    if (p.$error || p.$tone === 'error') return 'var(--danger)';
+    if (p.$tone === 'success') return 'var(--ok)';
+    if (p.$tone === 'warning') return 'color-mix(in srgb, #f4d35e 88%, var(--text))';
+    return 'var(--muted)';
+  }};
 `;
 
 const CaptionSource = styled.p`
@@ -817,6 +822,30 @@ function parseParagraphs(text) {
     .filter(Boolean);
 }
 
+function inferStatusTone(message) {
+  const value = `${message || ''}`.trim().toLowerCase();
+  if (!value) return 'neutral';
+
+  if (value.includes('σφάλμα') || value.includes('απέτυχε') || value.includes('not found')) {
+    return 'error';
+  }
+
+  if (
+    value.startsWith('βήμα ') ||
+    value.includes('ρύθμισε') ||
+    value.includes('συμπλήρωσε') ||
+    value.includes('επίλεξε') ||
+    value.includes('ξεκλείδωσε') ||
+    value.includes('δεν υπάρχει') ||
+    value.includes('δεν υπάρχουν') ||
+    value.includes('ενεργοποιείται')
+  ) {
+    return 'warning';
+  }
+
+  return 'success';
+}
+
 function buildArticleChanges(baseText, clientText) {
   const beforeParagraphs = parseParagraphs(baseText);
   const afterParagraphs = parseParagraphs(clientText);
@@ -901,10 +930,12 @@ function AdminApp() {
   const [password, setPassword] = useState('');
   const [mediaItems, setMediaItems] = useState([]);
   const [carouselPosts, setCarouselPosts] = useState([]);
+  const [feedOrderItems, setFeedOrderItems] = useState([]);
   const [instagramGridItems, setInstagramGridItems] = useState([]);
   const [instagramStoryItems, setInstagramStoryItems] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const [draggedId, setDraggedId] = useState(null);
+  const [draggedCarouselSlideId, setDraggedCarouselSlideId] = useState('');
   const [orderLocked, setOrderLocked] = useState(false);
   const [captionsText, setCaptionsText] = useState('');
   const [status, setStatus] = useState('');
@@ -1123,6 +1154,14 @@ function AdminApp() {
 
     const nextItems = createMediaItems(validFiles);
     setMediaItems((prev) => [...prev, ...nextItems]);
+    setFeedOrderItems((prev) => [
+      ...prev,
+      ...nextItems.map((item) => ({
+        id: `single:${item.id}`,
+        kind: 'single',
+        refId: item.id
+      }))
+    ]);
     setStatus(`Προστέθηκαν ${validFiles.length} αρχεία.`);
   }
 
@@ -1141,6 +1180,11 @@ function AdminApp() {
   }
 
   function appendCarouselFiles(files) {
+    if (orderLocked) {
+      setStatus('Ξεκλείδωσε πρώτα τη σειρά αν θέλεις να προσθέσεις ή να αλλάξεις carousel.');
+      return;
+    }
+
     const validFiles = Array.from(files || []).filter((file) =>
       file.type.startsWith('image/') || file.type.startsWith('video/')
     );
@@ -1149,12 +1193,20 @@ function AdminApp() {
       return;
     }
     const nextItems = createMediaItems(validFiles);
+    const nextCarouselId = `${Date.now()}-carousel-${Math.random().toString(36).slice(2, 8)}`;
     setCarouselPosts((prev) => [
       ...prev,
       {
-        id: `${Date.now()}-carousel-${Math.random().toString(36).slice(2, 8)}`,
-        desiredPosition: mediaItems.length + prev.length + 1,
+        id: nextCarouselId,
         items: nextItems
+      }
+    ]);
+    setFeedOrderItems((prev) => [
+      ...prev,
+      {
+        id: `carousel:${nextCarouselId}`,
+        kind: 'carousel',
+        refId: nextCarouselId
       }
     ]);
     setStatus(`Δημιουργήθηκε carousel post με ${nextItems.length} slides.`);
@@ -1174,6 +1226,11 @@ function AdminApp() {
         )
         .filter((carouselPost) => carouselPost.items.length > 0);
 
+      const stillExists = next.some((carouselPost) => carouselPost.id === carouselId);
+      if (!stillExists) {
+        setFeedOrderItems((orderPrev) => orderPrev.filter((entry) => !(entry.kind === 'carousel' && entry.refId === carouselId)));
+      }
+
       return next;
     });
   }
@@ -1188,17 +1245,7 @@ function AdminApp() {
       }
       return prev.filter((carouselPost) => carouselPost.id !== carouselId);
     });
-  }
-
-  function updateCarouselDesiredPosition(carouselId, value) {
-    const maxPosition = mediaItems.length + carouselPosts.length;
-    const parsed = Number(value);
-    const nextValue = Math.min(Math.max(Number.isFinite(parsed) ? parsed : 1, 1), Math.max(maxPosition, 1));
-    setCarouselPosts((prev) =>
-      prev.map((carouselPost) =>
-        carouselPost.id === carouselId ? { ...carouselPost, desiredPosition: nextValue } : carouselPost
-      )
-    );
+    setFeedOrderItems((prev) => prev.filter((entry) => !(entry.kind === 'carousel' && entry.refId === carouselId)));
   }
 
   function appendInstagramStories(files) {
@@ -1220,21 +1267,21 @@ function AdminApp() {
     });
   }
 
-  function reorderItems(fromIndex, toIndex) {
-    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
-    setMediaItems((prev) => {
-      const copy = [...prev];
-      const [picked] = copy.splice(fromIndex, 1);
-      copy.splice(toIndex, 0, picked);
-      return copy;
-    });
+  function reorderItems(items, fromIndex, toIndex) {
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return items;
+    const copy = [...items];
+    const [picked] = copy.splice(fromIndex, 1);
+    copy.splice(toIndex, 0, picked);
+    return copy;
   }
 
   function handleTileDrop(targetId) {
     if (orderLocked || !draggedId) return;
-    const fromIndex = mediaItems.findIndex((item) => item.id === draggedId);
-    const toIndex = mediaItems.findIndex((item) => item.id === targetId);
-    reorderItems(fromIndex, toIndex);
+    setFeedOrderItems((prev) => {
+      const fromIndex = prev.findIndex((item) => item.id === draggedId);
+      const toIndex = prev.findIndex((item) => item.id === targetId);
+      return reorderItems(prev, fromIndex, toIndex);
+    });
     setDraggedId(null);
   }
 
@@ -1245,13 +1292,44 @@ function AdminApp() {
       if (found) URL.revokeObjectURL(found.previewUrl);
       return prev.filter((item) => item.id !== id);
     });
+    setFeedOrderItems((prev) => prev.filter((entry) => !(entry.kind === 'single' && entry.refId === id)));
   }
 
   function clearMedia() {
     if (orderLocked) return;
     mediaItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
     setMediaItems([]);
+    setFeedOrderItems((prev) => prev.filter((entry) => entry.kind !== 'single'));
     setStatus('Η λίστα αρχείων καθαρίστηκε.');
+  }
+
+  function clearCarouselUploads() {
+    if (orderLocked) return;
+    carouselPosts.forEach((carouselPost) => {
+      carouselPost.items.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    });
+    setCarouselPosts([]);
+    setFeedOrderItems((prev) => prev.filter((entry) => entry.kind !== 'carousel'));
+    setStatus('Τα carousel uploads καθαρίστηκαν.');
+  }
+
+  function handleCarouselSlideDrop(carouselId, targetItemId) {
+    if (orderLocked || !draggedCarouselSlideId) return;
+    const [sourceCarouselId, sourceItemId] = draggedCarouselSlideId.split('::');
+    if (sourceCarouselId !== carouselId || !sourceItemId) return;
+
+    setCarouselPosts((prev) =>
+      prev.map((carouselPost) => {
+        if (carouselPost.id !== carouselId) return carouselPost;
+        const fromIndex = carouselPost.items.findIndex((item) => item.id === sourceItemId);
+        const toIndex = carouselPost.items.findIndex((item) => item.id === targetItemId);
+        return {
+          ...carouselPost,
+          items: reorderItems(carouselPost.items, fromIndex, toIndex)
+        };
+      })
+    );
+    setDraggedCarouselSlideId('');
   }
 
   function addArticleDraft() {
@@ -1775,7 +1853,7 @@ function AdminApp() {
       return;
     }
 
-    if (mediaItems.length > 0 && !orderLocked) {
+    if (feedOrderItems.length > 0 && !orderLocked) {
       setStatus('Βήμα 2: Κλείδωσε την τελική σειρά αναρτήσεων πριν το ανέβασμα.');
       return;
     }
@@ -1789,19 +1867,21 @@ function AdminApp() {
     const storage = createStorageAdapter();
 
     const dynamicUsername = (selectedClient?.slug || selectedClient?.name || '').trim();
-    const feedPublishItems = mediaItems.map((item, index) => ({
-      kind: 'single',
-      item,
-      sourceIndex: index
-    }));
-    carouselPosts.forEach((carouselPost) => {
-      const rawPosition = Number(carouselPost.desiredPosition) || feedPublishItems.length + 1;
-      const safeIndex = Math.max(Math.min(rawPosition - 1, feedPublishItems.length), 0);
-      feedPublishItems.splice(safeIndex, 0, {
-        kind: 'carousel',
-        carouselPost
-      });
-    });
+    const mediaById = new Map(mediaItems.map((item) => [item.id, item]));
+    const carouselById = new Map(carouselPosts.map((carouselPost) => [carouselPost.id, carouselPost]));
+    const feedPublishItems = feedOrderItems
+      .map((orderItem) => {
+        if (orderItem.kind === 'single') {
+          const item = mediaById.get(orderItem.refId);
+          if (!item) return null;
+          const sourceIndex = mediaItems.findIndex((sourceItem) => sourceItem.id === item.id);
+          return { kind: 'single', item, sourceIndex };
+        }
+        const carouselPost = carouselById.get(orderItem.refId);
+        if (!carouselPost) return null;
+        return { kind: 'carousel', carouselPost };
+      })
+      .filter(Boolean);
 
     let sortOrderCursor = nextSortOrderStart;
     for (let feedIndex = 0; feedIndex < feedPublishItems.length; feedIndex += 1) {
@@ -1962,6 +2042,7 @@ function AdminApp() {
     instagramGridItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
     setMediaItems([]);
     setCarouselPosts([]);
+    setFeedOrderItems([]);
     setInstagramStoryItems([]);
     setInstagramGridItems([]);
     setOrderLocked(false);
@@ -2278,8 +2359,37 @@ function AdminApp() {
     setBusy(false);
   }
 
+  const feedPreviewItems = useMemo(() => {
+    const mediaById = new Map(mediaItems.map((item) => [item.id, item]));
+    const carouselById = new Map(carouselPosts.map((carouselPost) => [carouselPost.id, carouselPost]));
+
+    return feedOrderItems
+      .map((orderItem) => {
+        if (orderItem.kind === 'single') {
+          const item = mediaById.get(orderItem.refId);
+          if (!item) return null;
+          return {
+            id: orderItem.id,
+            kind: 'single',
+            label: item.file.name,
+            item
+          };
+        }
+
+        const carouselPost = carouselById.get(orderItem.refId);
+        if (!carouselPost) return null;
+        return {
+          id: orderItem.id,
+          kind: 'carousel',
+          label: `Carousel (${carouselPost.items.length} slides)`,
+          carouselPost
+        };
+      })
+      .filter(Boolean);
+  }, [feedOrderItems, mediaItems, carouselPosts]);
+
   const parsedCaptions = useMemo(() => parseCaptions(captionsText), [captionsText]);
-  const plannedFeedPostCount = mediaItems.length + carouselPosts.length;
+  const plannedFeedPostCount = feedPreviewItems.length;
   const carouselSlideCount = carouselPosts.reduce((sum, carouselPost) => sum + carouselPost.items.length, 0);
   const mappedCaptions = Array.from({ length: plannedFeedPostCount }).reduce((sum, _item, index) => sum + (parsedCaptions[index] ? 1 : 0), 0);
   const scopedPosts = useMemo(
@@ -2387,8 +2497,8 @@ function AdminApp() {
               busy={busy}
               dragActive={dragActive}
               orderLocked={orderLocked}
-              mediaItems={mediaItems}
               carouselPosts={carouselPosts}
+              feedPreviewItems={feedPreviewItems}
               captionsText={captionsText}
               mappedCaptions={mappedCaptions}
               plannedFeedPostCount={plannedFeedPostCount}
@@ -2401,11 +2511,13 @@ function AdminApp() {
               appendFiles={appendFiles}
               appendCarouselFiles={appendCarouselFiles}
               removeCarouselPost={removeCarouselPost}
-              updateCarouselDesiredPosition={updateCarouselDesiredPosition}
               removeCarouselMedia={removeCarouselMedia}
               handleTileDrop={handleTileDrop}
+              handleCarouselSlideDrop={handleCarouselSlideDrop}
+              setDraggedCarouselSlideId={setDraggedCarouselSlideId}
               removeMedia={removeMedia}
               clearMedia={clearMedia}
+              clearCarouselUploads={clearCarouselUploads}
               appendInstagramGridFiles={appendInstagramGridFiles}
               clearInstagramGrid={() =>
                 setInstagramGridItems((prev) => {
@@ -2769,9 +2881,9 @@ function AdminApp() {
             </ActionButton>
           </Actions>
 
-          {status && <State>{status}</State>}
-          {!hasPublishedPosts && <State>Η προεπισκόπηση για το tab "{CONTENT_TABS[activeTab]}" ενεργοποιείται μετά το πρώτο upload.</State>}
-          {copyState && <State>{copyState}</State>}
+          {status && <State $tone={inferStatusTone(status)}>{status}</State>}
+          {!hasPublishedPosts && <State $tone="warning">Η προεπισκόπηση για το tab "{CONTENT_TABS[activeTab]}" ενεργοποιείται μετά το πρώτο upload.</State>}
+          {copyState && <State $tone={inferStatusTone(copyState)}>{copyState}</State>}
         </Hero>
 
         <List>
@@ -2842,13 +2954,35 @@ function AdminApp() {
               const isInstagramStory = instagramMeta?.kind === 'story';
               if (activeTab === 'instagram') {
                 const mediaPreview = replacementFiles[post.id] && isVideoFile(replacementFiles[post.id]) ? (
-                  <video src={replacementPreviews[post.id]} muted playsInline preload="metadata" />
+                  <video
+                    src={replacementPreviews[post.id]}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
                 ) : replacementFiles[post.id] ? (
-                  <img src={replacementPreviews[post.id]} alt={replacementFiles[post.id].name} loading="lazy" />
+                  <img
+                    src={replacementPreviews[post.id]}
+                    alt={replacementFiles[post.id].name}
+                    loading="lazy"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
                 ) : isVideoPost(post) ? (
-                  <video src={replacementPreviews[post.id] || post.image_url} muted playsInline preload="metadata" />
+                  <video
+                    src={replacementPreviews[post.id] || post.image_url}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
                 ) : (replacementPreviews[post.id] || post.image_url) ? (
-                  <img src={replacementPreviews[post.id] || post.image_url} alt={post.title} loading="lazy" />
+                  <img
+                    src={replacementPreviews[post.id] || post.image_url}
+                    alt={post.title}
+                    loading="lazy"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
                 ) : (
                   <MutedSmall>Χωρίς εικόνα</MutedSmall>
                 );

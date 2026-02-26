@@ -24,7 +24,7 @@ const thumbStyle = {
   border: '1px solid color-mix(in srgb, var(--greyDark) 35%, transparent)',
   borderRadius: '0.85rem',
   overflow: 'hidden',
-  minHeight: '128px',
+  aspectRatio: '4 / 5',
   background: 'color-mix(in srgb, var(--gloomDark) 72%, transparent)',
   display: 'grid',
   alignItems: 'center'

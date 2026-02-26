@@ -14,7 +14,6 @@
     { "source": "/app.js", "destination": "/public/app.js" },
     { "source": "/config.js", "destination": "/public/config.js" },
     { "source": "/admin/(.*)", "destination": "/public/admin/$1" },
-    { "source": "/api/(.*)", "destination": "/public/api/$1" },
     { "source": "/components/(.*)", "destination": "/public/components/$1" },
     { "source": "/core/(.*)", "destination": "/public/core/$1" },
     { "source": "/hooks/(.*)", "destination": "/public/hooks/$1" },
