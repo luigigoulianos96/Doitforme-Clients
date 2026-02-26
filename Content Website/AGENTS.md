@@ -1,253 +1,96 @@
 # AGENTS.md
 
-# 1. Core Principle
+## 1. Runtime Truth (Critical)
 
-- Readability is the primary constraint.
-- Clarity over brevity.
-- Explicit over compact.
-- Prioritize readability over defensive runtime validation inside functions (e.g., avoid `typeof` checks unless explicitly required).
-- Write a bit riskier code in return of readability. Don t use so many validations inside the functions, example: typeof, I don t care if I pass wrong typeby mistake.
-
----
-
-# 2. Project Structure
-
-## Pages
-- Path: `src/pages/<pageName>/`
-- One page = one folder
-- Main file:
-  - Pattern: `PAGE_NAME.jsx`
-  - Uppercase
-  - Multi-word: underscores `_`
-  - One-word: single uppercase word
-
-Examples:
-- `src/pages/userSettings/USER_SETTINGS.jsx`
-- `src/pages/login/LOGIN.jsx`
+- Production/runtime entrypoints are:
+  - `public/portal.html` -> `public/portal.js`
+  - `public/admin.html` -> `public/admin.js`
+  - `public/index.html` -> `public/app.js`
+- `public/` is the active runtime codebase.
+- `_archive/src-legacy-2026-02-26/` is archived legacy code and non-runtime.
+- Do not edit archived files expecting runtime behavior changes.
 
 ---
 
-## Components
+## 2. Current Architecture
 
-### Page-specific
-- Used in one page only
-- Path: `src/pages/<pageName>/components/`
-- Filename: `Page_Name_Component.jsx`
+- Preview flow (`index.html`) is modular:
+  - UI components in `public/components/`
+  - Hooks in `public/hooks/`
+  - Helpers in `public/utils/`
+  - Shared styles in `public/core/`
+- Admin and portal flows are currently monolithic:
+  - `public/admin.js`
+  - `public/portal.js`
 
-### Shared
-- Used in more than one page
-- Path: `src/components/<componentGroup>/`
-- Filename:
-  - Multi-word: `Component_Name.jsx`
-  - One-word: `Component_.jsx`
+Layering target for new work:
 
----
-
-## Utilities
-
-### Page-only
-- Used in one page only
-- Path: `src/pages/<pageName>/utils/`
-- Filename:
-  - Lowercase
-  - Underscores `_`
-  - **Must be multi-word**
-- Pattern: `descriptive_name.jsx`
-
-### Shared
-- Used in more than one page
-- Path: `src/utils/`
-- Filename:
-  - Lowercase
-  - Underscores `_`
-  - **Must be multi-word**
-- Pattern: `descriptive_name.jsx`
-
-One-word utilities: **not allowed**
+`UI -> Hook/Helper -> Supabase`
 
 ---
 
-# 3. Naming Conventions
+## 3. Folder Rules
 
-- Multi-word names use `_`
-- Case:
-  - Pages: UPPERCASE
-  - Components: PascalCase_with_underscores
-  - Utilities: lowercase_with_underscores
-- Props and variables: camelCase
+### `public/components/`
+- Keep presentational components only.
+- No Supabase queries here.
 
-One-word names:
-- Pages: allowed (`LOGIN.jsx`)
-- Shared components: allowed (`Modal_.jsx`)
-- Utilities: **forbidden**
+### `public/hooks/`
+- Keep preview data fetching, mutations, and derived data here.
+- No styled layout definitions unless unavoidable.
 
----
+### `public/services/`
+- Keep Supabase client setup helpers here.
+- Prefer `public/services/supabaseClient.js` for shared client creation.
 
-# 4. Scope & Relocation (Mandatory)
+### `public/utils/`
+- Pure helper functions only (parsing/formatting/classification).
+- No network/storage side effects.
 
-- Page-only code stays inside its page folder.
-- The moment code is used in a second page, it becomes shared and must be moved.
-
-Placement:
-- Page-only:
-  - Components → `src/pages/<pageName>/components/`
-  - Utilities → `src/pages/<pageName>/utils/`
-- Shared:
-  - Components → `src/components/<componentGroup>/`
-  - Utilities → `src/utils/<utilGroup>/`
-
-Rules:
-- No alternative structures
-- No shared code inside page folders
-- No duplication instead of relocation
-- Imports must be updated after moves
+### `supabase/`
+- Schema and DB policy SQL only.
+- Keep changes additive and migration-safe.
 
 ---
 
-# 5. JavaScript Rules
+## 4. Naming & Style Conventions
 
-## General
-- Function names: `snake_case` (lowercase)
-- Exports: named only
-  - `export const function_name = (...) => { ... }`
-- Default exports: not allowed
-- One quote style per project
-- Explicit braces only
-- No compact or implicit logic
-- Do not use `useMemo`
-- Functions must not contain conditional logic (no `if / else`, `switch`, or `?:`)
-- Don t use "useMemo"
-- Returns must be explicit and intentional
-- Side effects must be intentional and obvious
-- Every function must start with a 2-line max comment describing what it does
-- Every function must include backend-integration comments that clearly state:
-  - What values to replace
-  - Where to place requests, and the required order for backend calls
-
-## Component Exports
-- Export name must match filename exactly
-- For one-word shared components:
-  - `Component_.jsx`
-  - `export const Component_ = (...) => { ... }`
-- Each `Component_.jsx` must contain a parent styled-component named `Component`
+- Components: `PascalCase`.
+- Hooks: `useSomething`.
+- Utilities: descriptive `camelCase` function names.
+- Keep naming consistent with existing files in `public/`.
+- Prefer explicit, readable logic over clever compact expressions.
 
 ---
 
-# 6. Readability Rules
+## 5. Supabase Rules
 
-Forbidden:
-- Nested ternaries
-- Chained `?:`
-- Deep inline boolean chains inside assignments
-
-Required:
-- Declare variable with default
-- No conditional logic inside functions (no `if / else`, `switch`, or `?:`)
-- Keep function bodies linear and explicit
-- Function description comments are required (max 2 lines)
-- For frontend code that will be wired to the backend later, add comments that show where requests belong and what data they use
-- Always add 1-2 lines of function description over each function
-- Always, when writting front end that will be wired with backend in the future, add comments showing the backend developers where to perform the requests and on what
-
-## Component Rendering
-
-Forbidden:
-- Assigning JSX to variables via `if / else` before a component `return`
-  - Example pattern: `let content; if (...) { content = (...) }`
-
-Required:
-- Each component must have a single `return`.
-- No conditional rendering inside components (no `if / else`, `switch`, or `?:` in JSX).
-- If multiple render paths are needed, use lookup tables or separate components selected via maps defined outside the component function.
-
-## Props Usage
-
-Forbidden:
-- Assigning props to local variables with fallback defaults
-  - Example pattern: `const facebook = props?.fb || {}`
-
-Required:
-- Use props inline in JSX without fallback defaults or `||`
-  - Example: `<h5>{props?.fb}</h5>`
+- Runtime config comes from `window.APP_CONFIG` in `public/config.js`.
+- Shared preview client factory exists in:
+  - `public/services/supabaseClient.js`
+- Current legacy exception:
+  - `public/admin.js` and `public/portal.js` still contain local client factory wrappers.
+- For new modular code, avoid introducing additional Supabase client factories.
 
 ---
 
-# 7. Styling
+## 6. Safe Change Practices
 
-## General
-- **styled-components only**
-- No inline styles
-- No CSS files / modules
-- No Tailwind / Emotion
-- `monica-alexandria` is available and preferred
-
-## Typography (Strict)
-- Every text node must use exactly one:
-  `h1 > h2 > h3 > h4 > h5 > p > h6`
-- Follow hierarchy
-- Never modify:
-  - font-size
-  - line-height
-  - font-weight
-- Only non-typography styles allowed
+- Always preserve behavior of:
+  - query params `client` and `mode`
+  - title prefixes `[IG]`, `[ARTICLE]`, `[LOGO]`
+  - approval statuses `pending`, `approved`, `disapproved`
+- Keep route rewrites aligned in `vercel.json` when adding new public paths.
+- Smoke test these pages after changes:
+  - `/public/portal.html`
+  - `/public/admin.html`
+  - `/public/index.html`
 
 ---
 
-# 8. styled-components Rules
+## 7. Common Mistakes To Avoid
 
-## Naming
-- PascalCase only
-- No underscores
-- Example: `HomeWrap`, not `Home_Wrap`
-
-## Units
-- `rem` only
-- No `px`
-- `1rem = 10px`
-- Other non-px units allowed (e.g., `vh`)
-
-## Design Tokens
-- Prefer existing CSS variables for spacing, radius, colors, shadows
-- Do not hardcode values if a variable exists
-
-Spacing:
-- Prefer `--smallPads`, `--normalPads`, `--largePads`
-- Otherwise use `rem`
-
-Radius:
-- Prefer `--smallRadius`, `--normalRadius`
-
-Shadows:
-- Prefer predefined shadow variables
-- No custom shadow strings
-
----
-
-# 9. Theme-Based Colors & Shadows
-
-## Mandatory
-- All non-brand colors and shadows must use `p.theme`
-
-Examples:
-- `color: ${p => p.theme.color}`
-- `background: ${p => p.theme.background}`
-- `box-shadow: ${p => p.theme.out}`
-
-## Allowed Tokens
-
-Colors:
-- `flare`, `background`, `color`, `low`, `mid`, `high`, `overlay`
-
-Shadows:
-- `in`, `inFocus`, `out`, `outFocus`
-
-## Prohibited
-- Raw CSS variables
-- Hex / rgb / rgba / hsl
-- Custom shadow values
-- `filter: drop-shadow(...)`
-
-## Brand / Semantic Exception
-Allowed only when intentional:
-- `main*`, `focus*`, `error*`, `warning*`, `success*`
-- Platform colors when representing that platform
+- Editing `_archive/*` expecting production impact.
+- Adding data-fetch logic inside render-only section components.
+- Changing Supabase selected field shapes without updating consumers.
+- Forgetting storage cleanup when deleting rows with file paths.

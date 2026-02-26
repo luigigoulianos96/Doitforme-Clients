@@ -18,44 +18,31 @@ Use this file as the always-on template before starting any feature in Codex.
   - `vercel.json`
 - Supabase schema source:
   - `supabase/schema.sql`
+- Archived legacy (non-runtime):
+  - `_archive/src-legacy-2026-02-26/`
 
 ## 2. Strict Layering Rule
 
 Always keep:
 
-`UI -> Hook -> API -> Supabase`
+`UI -> Hook/Helper -> Supabase`
 
-- UI/entry/sections/components live in `public/` and `public/admin/`.
-- Hooks live in `public/hooks/` and `public/admin/use*.js`.
-- Supabase queries live only in `public/api/`.
-- Supabase client creation is centralized in:
-  - `public/services/supabaseClient.js`
-  - `public/api/clientApi.js`
+- Runtime code lives in `public/`.
+- Preview flow (`public/app.js`) uses hooks in `public/hooks/`.
+- Supabase client helper exists at `public/services/supabaseClient.js` (used by preview hooks).
+- Admin and portal flows currently keep Supabase queries directly in:
+  - `public/admin.js`
+  - `public/portal.js`
 
 ## 3. Exact Paths To Change By Feature Type
 
 ### A) New Admin feature (upload, moderation, status, client scope)
 
-- Start in:
-  - `public/admin/AdminApp.js`
-- Then update matching hook(s):
-  - `public/admin/useAdminAuth.js`
-  - `public/admin/useAdminClientScope.js`
-  - `public/admin/useAdminClientData.js`
-  - `public/admin/useAdminUploads.js`
-  - `public/admin/useAdminApprovals.js`
-  - `public/admin/useAdminPosts.js`
-  - `public/admin/useAdminLogos.js`
-  - `public/admin/useAdminStatus.js`
-- UI sections/components:
-  - `public/admin/sections/AdminMainSection.js`
-  - `public/admin/components/AdminStyles.js`
-  - `public/admin/components/AdminHelpers.js`
-- API changes:
-  - `public/api/clientApi.js`
-  - `public/api/postsApi.js`
-  - `public/api/logoApi.js`
-  - `public/api/approvalApi.js`
+- Start and implement in:
+  - `public/admin.js`
+- Shared helpers already used by preview are in:
+  - `public/utils/appHelpers.js`
+  - `public/services/supabaseClient.js` (if/when admin is migrated to shared client factory)
 
 ### B) New Client Preview feature (public/index.html flow)
 
@@ -72,29 +59,20 @@ Always keep:
   - `public/components/logo/LogoKitPresentation.js`
 - Helpers:
   - `public/utils/appHelpers.js`
-- API:
-  - `public/api/postsApi.js`
-  - `public/api/logoApi.js`
-  - `public/api/clientApi.js`
-  - `public/api/approvalApi.js`
 
 ### C) New Portal feature (client provisioning and portal management)
 
 - Entry/UI:
   - `public/portal.js`
-- API:
-  - `public/api/clientApi.js`
-  - `public/api/postsApi.js`
 
 ### D) New Supabase endpoint/query
 
-- Add query function in one of:
-  - `public/api/clientApi.js`
-  - `public/api/postsApi.js`
-  - `public/api/logoApi.js`
-  - `public/api/approvalApi.js`
-- Update consuming hook (never UI direct query):
-  - `public/hooks/*` or `public/admin/use*.js`
+- Preview query changes:
+  - `public/hooks/usePreviewData.js`
+- Admin query changes:
+  - `public/admin.js`
+- Portal query changes:
+  - `public/portal.js`
 - If schema changes are required:
   - Add additive SQL in `supabase/schema.sql` (no destructive edits)
 
@@ -104,7 +82,7 @@ Always keep:
   - `public/core/styles/App.styles.js`
   - `public/core/animations.js`
 - Admin styles:
-  - `public/admin/components/AdminStyles.js`
+  - `public/admin.js` (styled-components live in-file)
 
 ### F) Deployment/routing issues
 
@@ -127,8 +105,7 @@ Goal:
 
 Runtime constraints (must keep):
 - Keep HTML entrypoints intact: public/portal.html, public/admin.html, public/index.html
-- Keep layering: UI -> Hook -> API -> Supabase
-- No direct Supabase calls in UI files
+- Keep layering: UI -> Hook/Helper -> Supabase
 - Preserve existing response/error shapes unless explicitly changing contract
 
 Files to inspect first:
@@ -152,14 +129,12 @@ Validation checklist:
 - Console has no runtime errors
 - Network requests succeed with expected payload shape
 - Final grep guard:
-  rg -n "src/entry|src/pages|/src/" . --glob '!node_modules/**'
+  rg -n "from '/src|/src/" public server.js vercel.json
 ```
 
 ## 5. Post-Feature Definition of Done
 
 - All changed files follow layer rule.
-- No direct Supabase calls outside `public/api/`.
 - Entry pages still load.
 - Query changes are reflected in `supabase/schema.sql` if needed.
 - `vercel.json` still routes correctly.
-
