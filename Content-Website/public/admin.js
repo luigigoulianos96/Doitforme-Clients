@@ -482,6 +482,34 @@ const List = styled.section`
   padding: 1rem;
 `;
 
+const PostsGrid = styled.div`
+  margin-top: 0.7rem;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.7rem;
+
+  @media (max-width: 1380px) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  @media (max-width: 1120px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  @media (max-width: 860px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 620px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const PostGridItem = styled.div`
+  min-width: 0;
+  ${(p) => p.$expanded && 'grid-column: 1 / -1;'}
+`;
+
 const ListHeader = styled.div`
   display: flex;
   align-items: center;
@@ -535,12 +563,18 @@ const Row = styled.article`
   border: 1px solid color-mix(in srgb, var(--greyDark) 24%, transparent);
   border-radius: 14px;
   background: color-mix(in srgb, var(--gloom) 62%, transparent);
-  margin-top: 0.7rem;
+  height: 100%;
+  ${(p) => p.$compact && 'flex-direction: column; gap: 0.7rem; padding: 0.75rem;'}
+
+  & + & {
+    margin-top: 0.7rem;
+  }
 `;
 
 const RowMain = styled.div`
   flex: 1;
   min-width: 0;
+  width: 100%;
 `;
 
 const RowHead = styled.div`
@@ -568,6 +602,23 @@ const RowThumb = styled.div`
 
 const RowHeadText = styled.div`
   min-width: 0;
+`;
+
+const RowSummaryButton = styled.button`
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+`;
+
+const RowSummaryHint = styled.span`
+  display: block;
+  margin-top: 0.22rem;
+  color: var(--muted);
+  font-size: 1.2rem;
 `;
 
 const EditLabel = styled.span`
@@ -641,10 +692,55 @@ const ChangeLine = styled.p`
   background: color-mix(in srgb, var(--gloomDark) 54%, transparent);
 `;
 
+const AttachmentGrid = styled.div`
+  margin-top: 0.45rem;
+  display: grid;
+  gap: 0.7rem;
+`;
+
+const AttachmentCard = styled.div`
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.7rem;
+  border-radius: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 24%, transparent);
+  background: color-mix(in srgb, var(--gloomDark) 48%, transparent);
+`;
+
+const AttachmentThumb = styled.a`
+  display: block;
+  width: min(18rem, 100%);
+  aspect-ratio: 16 / 10;
+  border-radius: 0.8rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 28%, transparent);
+  background: color-mix(in srgb, var(--gloom) 70%, transparent);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+`;
+
+const AttachmentLink = styled.a`
+  width: fit-content;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--accent);
+`;
+
+const AttachmentAudio = styled.audio`
+  width: min(30rem, 100%);
+  max-width: 100%;
+`;
+
 const RowActions = styled.div`
   display: grid;
   gap: 0.65rem;
   min-width: 19rem;
+  ${(p) => p.$compact && 'width: 100%; min-width: 0; justify-items: end;'}
 `;
 
 const Pill = styled.span`
@@ -737,6 +833,39 @@ function postReviewLabel(state) {
   if (state === 'rejected') return 'Απορρίφθηκε';
   if (state === 'awaiting') return 'Σε αναμονή για έγκριση';
   return 'Χρειάζεται αλλαγές';
+}
+
+const POSTS_SELECT_WITH_FEEDBACK_ATTACHMENTS = 'id,title,caption,image_url,image_path,status,sort_order,created_at,approval_status,client_notes,client_feedback_image_url,client_feedback_image_path,client_feedback_audio_url,client_feedback_audio_path,client_id';
+const POSTS_SELECT_WITH_FEEDBACK_IMAGE = 'id,title,caption,image_url,image_path,status,sort_order,created_at,approval_status,client_notes,client_feedback_image_url,client_feedback_image_path,client_id';
+const POSTS_SELECT_WITH_FEEDBACK_AUDIO = 'id,title,caption,image_url,image_path,status,sort_order,created_at,approval_status,client_notes,client_feedback_audio_url,client_feedback_audio_path,client_id';
+const POSTS_SELECT_BASE = 'id,title,caption,image_url,image_path,status,sort_order,created_at,approval_status,client_notes,client_id';
+
+function hasMissingColumnError(error, columns) {
+  const message = `${error?.message || ''}`.toLowerCase();
+  return columns.some((column) => message.includes(`${column}`.toLowerCase()));
+}
+
+function resolveFeedbackAttachmentUrl(url, path) {
+  const directUrl = `${url || ''}`.trim();
+  if (directUrl) return directUrl;
+
+  const storagePath = `${path || ''}`.trim();
+  if (!storagePath) return '';
+
+  try {
+    return getStoragePublicUrl(storagePath);
+  } catch {
+    return '';
+  }
+}
+
+function queryClientPosts(client, clientId, selectClause) {
+  return client
+    .from('posts')
+    .select(selectClause)
+    .eq('client_id', clientId)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: false });
 }
 
 const CONTENT_TABS = {
@@ -949,6 +1078,7 @@ function AdminApp() {
   const [replacementFiles, setReplacementFiles] = useState({});
   const [replacementPreviews, setReplacementPreviews] = useState({});
   const [activeTab, setActiveTab] = useState('instagram');
+  const [expandedPostId, setExpandedPostId] = useState('');
   const [articleDrafts, setArticleDrafts] = useState([
     { id: `${Date.now()}-article-1`, title: '', body: '', imageFile: null, imagePreview: '' }
   ]);
@@ -1004,6 +1134,10 @@ function AdminApp() {
     loadPosts();
     loadLogoKits();
   }, [client, session, selectedClient]);
+
+  useEffect(() => {
+    setExpandedPostId('');
+  }, [activeTab, selectedClient?.id]);
 
   useEffect(() => {
     return () => {
@@ -1105,12 +1239,18 @@ function AdminApp() {
   async function loadPosts() {
     if (!selectedClient) return;
 
-    const { data, error } = await client
-      .from('posts')
-      .select('id,title,caption,image_url,image_path,status,sort_order,created_at,approval_status,client_notes,client_id')
-      .eq('client_id', selectedClient.id)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: false });
+    let supportsFeedbackAudio = true;
+    let { data, error } = await queryClientPosts(client, selectedClient.id, POSTS_SELECT_WITH_FEEDBACK_ATTACHMENTS);
+
+    if (error && hasMissingColumnError(error, ['client_feedback_audio_url', 'client_feedback_audio_path'])) {
+      supportsFeedbackAudio = false;
+      ({ data, error } = await queryClientPosts(client, selectedClient.id, POSTS_SELECT_WITH_FEEDBACK_IMAGE));
+    }
+
+    if (error && hasMissingColumnError(error, ['client_feedback_image_url', 'client_feedback_image_path'])) {
+      const fallbackSelect = supportsFeedbackAudio ? POSTS_SELECT_WITH_FEEDBACK_AUDIO : POSTS_SELECT_BASE;
+      ({ data, error } = await queryClientPosts(client, selectedClient.id, fallbackSelect));
+    }
 
     if (error) {
       setStatus(`Σφάλμα φόρτωσης: ${error.message}`);
@@ -2949,9 +3089,14 @@ function AdminApp() {
           ) : scopedPosts.length === 0 ? (
             <State>Δεν υπάρχουν στοιχεία ακόμα στο "{CONTENT_TABS[activeTab]}".</State>
           ) : (
-            scopedPosts.map((post) => {
+            <PostsGrid>
+            {scopedPosts.map((post) => {
               const instagramMeta = activeTab === 'instagram' ? instagramEntryMeta(post) : null;
               const isInstagramStory = instagramMeta?.kind === 'story';
+              const isExpanded = expandedPostId === post.id;
+              const feedbackImageUrl = resolveFeedbackAttachmentUrl(post.client_feedback_image_url, post.client_feedback_image_path);
+              const feedbackAudioUrl = resolveFeedbackAttachmentUrl(post.client_feedback_audio_url, post.client_feedback_audio_path);
+              const hasFeedbackAttachment = Boolean(feedbackImageUrl || feedbackAudioUrl);
               if (activeTab === 'instagram') {
                 const mediaPreview = replacementFiles[post.id] && isVideoFile(replacementFiles[post.id]) ? (
                   <video
@@ -2988,150 +3133,196 @@ function AdminApp() {
                 );
 
                 return (
-                  <InstagramPostCardUX
-                    key={post.id}
-                    post={post}
-                    instagramMeta={instagramMeta}
-                    isInstagramStory={isInstagramStory}
-                    busy={busy}
-                    mediaPreview={mediaPreview}
-                    title={instagramMeta?.fileName || stripPostTypePrefix(post.title)}
-                    createdAtText={formatDate(post.created_at)}
-                    reviewLabel={postReviewLabel(postReviewStatus(post))}
-                    publishStatus={post.status}
-                    approvalStatus={post.approval_status}
-                    captionValue={captionDrafts[post.id] ?? post.caption}
-                    onCaptionChange={(value) => handleCaptionDraft(post.id, value)}
-                    onReplaceMedia={(file) => handleReplacementSelect(post, file)}
-                    onSaveEdits={() => savePostEdits(post)}
-                    onDelete={() => deletePostPermanently(post)}
-                    clientNotes={post.client_notes}
-                  />
+                  <PostGridItem key={post.id} $expanded={isExpanded}>
+                    <InstagramPostCardUX
+                      post={post}
+                      instagramMeta={instagramMeta}
+                      isInstagramStory={isInstagramStory}
+                      expanded={isExpanded}
+                      onToggle={() => setExpandedPostId((prev) => (prev === post.id ? '' : post.id))}
+                      busy={busy}
+                      mediaPreview={mediaPreview}
+                      title={instagramMeta?.fileName || stripPostTypePrefix(post.title)}
+                      createdAtText={formatDate(post.created_at)}
+                      reviewLabel={postReviewLabel(postReviewStatus(post))}
+                      reviewState={postReviewStatus(post)}
+                      publishStatus={post.status}
+                      approvalStatus={post.approval_status}
+                      captionValue={captionDrafts[post.id] ?? post.caption}
+                      onCaptionChange={(value) => handleCaptionDraft(post.id, value)}
+                      onReplaceMedia={(file) => handleReplacementSelect(post, file)}
+                      onSaveEdits={() => savePostEdits(post)}
+                      onDelete={() => deletePostPermanently(post)}
+                      clientNotes={post.client_notes}
+                      clientFeedbackImageUrl={feedbackImageUrl}
+                      clientFeedbackAudioUrl={feedbackAudioUrl}
+                    />
+                  </PostGridItem>
                 );
               }
 
               return (
-              <Row key={post.id}>
+              <PostGridItem key={post.id} $expanded={isExpanded}>
+              <Row $compact={!isExpanded}>
                 <RowMain>
-                  <RowHead>
-                    <RowThumb>
-                      {activeTab === 'logo' && logoEntryKind(post) === 'font' ? (
-                        <MutedSmall>FONT</MutedSmall>
-                      ) : activeTab === 'logo' && logoEntryKind(post) === 'color' ? (
-                        <MutedSmall>COLOR</MutedSmall>
-                      ) : activeTab === 'logo' && logoEntryKind(post) === 'story' ? (
-                        <MutedSmall>STORY</MutedSmall>
-                      ) : replacementFiles[post.id] && isVideoFile(replacementFiles[post.id]) ? (
-                        <video src={replacementPreviews[post.id]} muted playsInline preload="metadata" />
-                      ) : replacementFiles[post.id] ? (
-                        <img src={replacementPreviews[post.id]} alt={replacementFiles[post.id].name} loading="lazy" />
-                      ) : isVideoPost(post) ? (
-                        <video src={replacementPreviews[post.id] || post.image_url} muted playsInline preload="metadata" />
-                      ) : (replacementPreviews[post.id] || post.image_url) ? (
-                        <img src={replacementPreviews[post.id] || post.image_url} alt={post.title} loading="lazy" />
-                      ) : (
-                        <MutedSmall>Χωρίς εικόνα</MutedSmall>
-                      )}
-                    </RowThumb>
-                    <RowHeadText>
-                      <strong>{activeTab === 'logo' ? logoEntryLabel(post) : (activeTab === 'instagram' ? (instagramMeta?.fileName || stripPostTypePrefix(post.title)) : stripPostTypePrefix(post.title))}</strong>
-                      <MutedSmall>{formatDate(post.created_at)}</MutedSmall>
-                    </RowHeadText>
-                  </RowHead>
-
-                  {!isInstagramStory && (
-                    <>
-                      <EditLabel>{activeTab === 'article' ? 'Κείμενο άρθρου' : 'Λεζάντα'}</EditLabel>
-                      <InlineCaption
-                        $large={activeTab === 'article'}
-                        rows={activeTab === 'article' ? '14' : '3'}
-                        value={captionDrafts[post.id] ?? post.caption}
-                        onChange={(event) => handleCaptionDraft(post.id, event.target.value)}
-                      />
-                    </>
-                  )}
-                  {isInstagramStory && (
-                    <RowText><strong>Story:</strong> Η προεπισκόπηση story δεν εμφανίζει λεζάντα.</RowText>
-                  )}
-
-                  <Actions>
-                    <ActionButton type="button" $type="primary" disabled={busy} onClick={() => savePostEdits(post)}>
-                      Αποθήκευση
-                    </ActionButton>
-                    <ActionMenu
-                      label="More"
-                      actions={[
-                        {
-                          key: `delete-${post.id}`,
-                          label: 'Διαγραφή',
-                          type: 'danger',
-                          disabled: busy,
-                          onClick: () => deletePostPermanently(post)
-                        }
-                      ]}
-                    />
-                  </Actions>
-
-                  <CollapsiblePanel title="Advanced">
-                    <EditActions>
-                      <MediaUploadLabel htmlFor={`replace-${post.id}`}>
-                        Αντικατάσταση
-                      </MediaUploadLabel>
-                      <HiddenFileInput
-                        id={`replace-${post.id}`}
-                        type="file"
-                        accept="image/*,video/*"
-                        onChange={(event) => {
-                          const file = (event.target.files || [])[0];
-                          handleReplacementSelect(post, file);
-                          event.target.value = '';
-                        }}
-                      />
-                    </EditActions>
-
-                    {activeTab === 'article' ? (
-                      <>
-                        <EditLabel>Ιστορικό</EditLabel>
-                        {(post.client_notes || '').trim().length > 0 ? (
-                          <ChangeHistoryWrap>
-                            {buildArticleChanges(post.caption, post.client_notes).length === 0 ? (
-                              <ChangeLine>Δεν υπάρχουν διαφορές παραγράφων.</ChangeLine>
-                            ) : (
-                              buildArticleChanges(post.caption, post.client_notes).map((change, changeIndex) => (
-                                <ChangeLine key={`${post.id}-${change.type}-${changeIndex}`}>
-                                  {change.type === 'added' ? 'Added: ' : 'Removed: '}
-                                  {change.paragraph}
-                                </ChangeLine>
-                              ))
-                            )}
-                          </ChangeHistoryWrap>
+                  <RowSummaryButton type="button" onClick={() => setExpandedPostId((prev) => (prev === post.id ? '' : post.id))}>
+                    <RowHead>
+                      <RowThumb>
+                        {activeTab === 'logo' && logoEntryKind(post) === 'font' ? (
+                          <MutedSmall>FONT</MutedSmall>
+                        ) : activeTab === 'logo' && logoEntryKind(post) === 'color' ? (
+                          <MutedSmall>COLOR</MutedSmall>
+                        ) : activeTab === 'logo' && logoEntryKind(post) === 'story' ? (
+                          <MutedSmall>STORY</MutedSmall>
+                        ) : replacementFiles[post.id] && isVideoFile(replacementFiles[post.id]) ? (
+                          <video src={replacementPreviews[post.id]} muted playsInline preload="metadata" />
+                        ) : replacementFiles[post.id] ? (
+                          <img src={replacementPreviews[post.id]} alt={replacementFiles[post.id].name} loading="lazy" />
+                        ) : isVideoPost(post) ? (
+                          <video src={replacementPreviews[post.id] || post.image_url} muted playsInline preload="metadata" />
+                        ) : (replacementPreviews[post.id] || post.image_url) ? (
+                          <img src={replacementPreviews[post.id] || post.image_url} alt={post.title} loading="lazy" />
                         ) : (
-                          <RowText>Δεν υπάρχουν αλλαγές πελάτη ακόμα.</RowText>
+                          <MutedSmall>Χωρίς εικόνα</MutedSmall>
                         )}
-                        {(post.client_notes || '').trim().length > 0 && (
-                          <Actions>
-                            <ActionButton type="button" onClick={() => copyClientArticleText(post)}>
-                              Αντιγραφή
-                            </ActionButton>
-                            <ActionButton type="button" $type="primary" disabled={busy} onClick={() => applyClientArticleEdits(post)}>
-                              Εφαρμογή
-                            </ActionButton>
-                          </Actions>
+                      </RowThumb>
+                      <RowHeadText>
+                        <strong>{activeTab === 'logo' ? logoEntryLabel(post) : (activeTab === 'instagram' ? (instagramMeta?.fileName || stripPostTypePrefix(post.title)) : stripPostTypePrefix(post.title))}</strong>
+                        <MutedSmall>{formatDate(post.created_at)}</MutedSmall>
+                        <RowSummaryHint>{isExpanded ? 'Πάτησε για απόκρυψη λεπτομερειών' : 'Πάτησε για προβολή λεπτομερειών'}</RowSummaryHint>
+                      </RowHeadText>
+                    </RowHead>
+                  </RowSummaryButton>
+
+                  {isExpanded ? (
+                    <>
+                      {!isInstagramStory && (
+                        <>
+                          <EditLabel>{activeTab === 'article' ? 'Κείμενο άρθρου' : 'Λεζάντα'}</EditLabel>
+                          <InlineCaption
+                            $large={activeTab === 'article'}
+                            rows={activeTab === 'article' ? '14' : '3'}
+                            value={captionDrafts[post.id] ?? post.caption}
+                            onChange={(event) => handleCaptionDraft(post.id, event.target.value)}
+                          />
+                        </>
+                      )}
+                      {isInstagramStory && (
+                        <RowText><strong>Story:</strong> Η προεπισκόπηση story δεν εμφανίζει λεζάντα.</RowText>
+                      )}
+
+                      <Actions>
+                        <ActionButton type="button" $type="primary" disabled={busy} onClick={() => savePostEdits(post)}>
+                          Αποθήκευση
+                        </ActionButton>
+                        <ActionMenu
+                          label="More"
+                          actions={[
+                            {
+                              key: `delete-${post.id}`,
+                              label: 'Διαγραφή',
+                              type: 'danger',
+                              disabled: busy,
+                              onClick: () => deletePostPermanently(post)
+                            }
+                          ]}
+                        />
+                      </Actions>
+
+                      <CollapsiblePanel title="Advanced">
+                        <EditActions>
+                          <MediaUploadLabel htmlFor={`replace-${post.id}`}>
+                            Αντικατάσταση
+                          </MediaUploadLabel>
+                          <HiddenFileInput
+                            id={`replace-${post.id}`}
+                            type="file"
+                            accept="image/*,video/*"
+                            onChange={(event) => {
+                              const file = (event.target.files || [])[0];
+                              handleReplacementSelect(post, file);
+                              event.target.value = '';
+                            }}
+                          />
+                        </EditActions>
+
+                        <EditLabel>Client feedback attachments</EditLabel>
+                        {hasFeedbackAttachment ? (
+                          <AttachmentGrid>
+                            {feedbackImageUrl ? (
+                              <AttachmentCard>
+                                <MutedSmall>Screenshot</MutedSmall>
+                                <AttachmentThumb href={feedbackImageUrl} target="_blank" rel="noreferrer">
+                                  <img src={feedbackImageUrl} alt={`Client feedback screenshot για ${stripPostTypePrefix(post.title) || 'post'}`} loading="lazy" />
+                                </AttachmentThumb>
+                                <AttachmentLink href={feedbackImageUrl} target="_blank" rel="noreferrer">
+                                  Άνοιγμα εικόνας
+                                </AttachmentLink>
+                              </AttachmentCard>
+                            ) : null}
+                            {feedbackAudioUrl ? (
+                              <AttachmentCard>
+                                <MutedSmall>Audio</MutedSmall>
+                                <AttachmentAudio controls preload="none" src={feedbackAudioUrl}>
+                                  Ο browser δεν υποστηρίζει audio playback.
+                                </AttachmentAudio>
+                                <AttachmentLink href={feedbackAudioUrl} target="_blank" rel="noreferrer">
+                                  Άνοιγμα ή λήψη ήχου
+                                </AttachmentLink>
+                              </AttachmentCard>
+                            ) : null}
+                          </AttachmentGrid>
+                        ) : (
+                          <RowText>Δεν υπάρχει client attachment.</RowText>
                         )}
-                      </>
-                    ) : (
-                      <RowText><strong>Σημειώσεις πελάτη:</strong> {(post.client_notes || '').trim() || 'Δεν υπάρχουν σημειώσεις ακόμα.'}</RowText>
-                    )}
-                  </CollapsiblePanel>
+
+                        {activeTab === 'article' ? (
+                          <>
+                            <EditLabel>Ιστορικό</EditLabel>
+                            {(post.client_notes || '').trim().length > 0 ? (
+                              <ChangeHistoryWrap>
+                                {buildArticleChanges(post.caption, post.client_notes).length === 0 ? (
+                                  <ChangeLine>Δεν υπάρχουν διαφορές παραγράφων.</ChangeLine>
+                                ) : (
+                                  buildArticleChanges(post.caption, post.client_notes).map((change, changeIndex) => (
+                                    <ChangeLine key={`${post.id}-${change.type}-${changeIndex}`}>
+                                      {change.type === 'added' ? 'Added: ' : 'Removed: '}
+                                      {change.paragraph}
+                                    </ChangeLine>
+                                  ))
+                                )}
+                              </ChangeHistoryWrap>
+                            ) : (
+                              <RowText>Δεν υπάρχουν αλλαγές πελάτη ακόμα.</RowText>
+                            )}
+                            {(post.client_notes || '').trim().length > 0 && (
+                              <Actions>
+                                <ActionButton type="button" onClick={() => copyClientArticleText(post)}>
+                                  Αντιγραφή
+                                </ActionButton>
+                                <ActionButton type="button" $type="primary" disabled={busy} onClick={() => applyClientArticleEdits(post)}>
+                                  Εφαρμογή
+                                </ActionButton>
+                              </Actions>
+                            )}
+                          </>
+                        ) : (
+                          <RowText><strong>Σημειώσεις πελάτη:</strong> {(post.client_notes || '').trim() || 'Δεν υπάρχουν σημειώσεις ακόμα.'}</RowText>
+                        )}
+                      </CollapsiblePanel>
+                    </>
+                  ) : null}
                 </RowMain>
-                <RowActions>
+                <RowActions $compact={!isExpanded}>
                   <ReviewPill $state={postReviewStatus(post)}>
                     {postReviewLabel(postReviewStatus(post))}
                   </ReviewPill>
                 </RowActions>
               </Row>
+              </PostGridItem>
             );
-            })
+            })}
+            </PostsGrid>
           )}
         </List>
       </Page>

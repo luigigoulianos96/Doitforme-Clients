@@ -31,6 +31,13 @@ const sectionTitleRowStyle = {
   gap: '0.6rem'
 };
 
+const actionRowStyle = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '0.55rem',
+  alignItems: 'center'
+};
+
 const dropzoneStyle = (active, locked) => ({
   border: `1px dashed ${active ? 'var(--focus)' : 'color-mix(in srgb, var(--greyDark) 48%, transparent)'}`,
   borderRadius: '0.85rem',
@@ -172,210 +179,214 @@ export default function InstagramFeedAdmin(props) {
     'form',
     { onSubmit, style: formStyle },
     h(
-      'section',
-      { style: sectionStyle },
-      h('h2', { style: sectionTitleStyle }, 'Primary workflow'),
-      h(
-        'div',
-        {
-          style: dropzoneStyle(dragActive, orderLocked),
-          onDragOver: (event) => {
-            event.preventDefault();
-            if (!orderLocked) setDragActive(true);
-          },
-          onDragLeave: () => setDragActive(false),
-          onDrop: (event) => {
-            event.preventDefault();
-            setDragActive(false);
-            appendFiles(event.dataTransfer.files);
-          }
-        },
-        h('strong', null, '1) Upload Feed Media'),
-        h('span', null, 'Ρίξε media για Feed εδώ (single post)'),
-        h(
-          'label',
-          { style: buttonStyle },
-          'Επιλογή',
-          h('input', {
-            type: 'file',
-            accept: 'image/*,video/*',
-            multiple: true,
-            disabled: orderLocked,
-            style: { display: 'none' },
-            onChange: (event) => {
-              appendFiles(event.target.files || []);
-              event.target.value = '';
-            }
-          })
-        ),
-        h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, orderLocked ? 'Η σειρά είναι κλειδωμένη. Ξεκλείδωσε για αλλαγές.' : 'Μπορείς να προσθέτεις αρχεία με πολλαπλά drop.')
-      ),
-      h(
-        'div',
-        {
-          style: dropzoneStyle(dragActive, orderLocked),
-          onDragOver: (event) => {
-            event.preventDefault();
-            if (!orderLocked) setDragActive(true);
-          },
-          onDragLeave: () => setDragActive(false),
-          onDrop: (event) => {
-            event.preventDefault();
-            setDragActive(false);
-            appendCarouselFiles(event.dataTransfer.files);
-          }
-        },
-        h('strong', null, '2) Create Carousel Post'),
-        h('span', null, 'Ρίξε πολλαπλές εικόνες/βίντεο για 1 carousel post'),
-        h(
-          'label',
-          { style: buttonStyle },
-          'Carousel',
-          h('input', {
-            type: 'file',
-            accept: 'image/*,video/*',
-            multiple: true,
-            disabled: orderLocked,
-            style: { display: 'none' },
-            onChange: (event) => {
-              appendCarouselFiles(event.target.files || []);
-              event.target.value = '';
-            }
-          })
-        ),
-        h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, 'Κάθε upload εδώ δημιουργεί ένα νέο carousel post.')
-      )
-    ),
-    h(
       CollapsiblePanel,
-      { title: 'Feed order & carousel (Advanced)' },
+      { title: 'Instagram posts & Carousel' },
       h(
         'section',
         { style: sectionStyle },
+        h('h2', { style: sectionTitleStyle }, 'Primary workflow'),
         h(
           'div',
-          { style: sectionTitleRowStyle },
-          h('h2', { style: sectionTitleStyle }, 'Feed order'),
-          h('button', { type: 'button', style: dangerButtonStyle, onClick: clearMedia, disabled: orderLocked }, 'Καθαρισμός single')
+          {
+            style: dropzoneStyle(dragActive, orderLocked),
+            onDragOver: (event) => {
+              event.preventDefault();
+              if (!orderLocked) setDragActive(true);
+            },
+            onDragLeave: () => setDragActive(false),
+            onDrop: (event) => {
+              event.preventDefault();
+              setDragActive(false);
+              appendFiles(event.dataTransfer.files);
+            }
+          },
+          h('strong', null, '1) Upload Feed Media'),
+          h('span', null, 'Ρίξε media για Feed εδώ (single post)'),
+          h(
+            'label',
+            { style: buttonStyle },
+            'Επιλογή',
+            h('input', {
+              type: 'file',
+              accept: 'image/*,video/*',
+              multiple: true,
+              disabled: orderLocked,
+              style: { display: 'none' },
+              onChange: (event) => {
+                appendFiles(event.target.files || []);
+                event.target.value = '';
+              }
+            })
+          ),
+          h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, orderLocked ? 'Η σειρά είναι κλειδωμένη. Ξεκλείδωσε για αλλαγές.' : 'Μπορείς να προσθέτεις αρχεία με πολλαπλά drop.')
         ),
-        feedPreviewItems.length === 0
-          ? h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, 'Δεν υπάρχουν feed posts ακόμα.')
-          : h(
-              'div',
-              { style: mediaGridStyle },
-              feedPreviewItems.map((feedItem, index) =>
-                h(
-                  'div',
-                  {
-                    key: feedItem.id,
-                    style: mediaTileStyle,
-                    draggable: !orderLocked,
-                    onDragStart: () => setDraggedId(feedItem.id),
-                    onDragEnd: () => setDraggedId(null),
-                    onDragOver: (event) => event.preventDefault(),
-                    onDrop: () => handleTileDrop(feedItem.id)
-                  },
-                  h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, `Post ${index + 1} • ${feedItem.kind === 'carousel' ? 'Carousel' : 'Single'}`),
-                  !orderLocked
-                    ? h(
-                        'button',
-                        {
-                          type: 'button',
-                          style: tileRemoveButtonStyle,
-                          title: 'Διαγραφή',
-                          onClick: () => (feedItem.kind === 'single' ? removeMedia(feedItem.item.id) : removeCarouselPost(feedItem.carouselPost.id))
-                        },
-                        '×'
-                      )
-                    : null,
-                  feedItem.kind === 'single'
-                    ? h(MediaPreview, { item: feedItem.item })
-                    : h(MediaPreview, { item: feedItem.carouselPost.items[0] }),
-                  h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, feedItem.label)
-                )
-              )
-            )
+        h(
+          'div',
+          {
+            style: dropzoneStyle(dragActive, orderLocked),
+            onDragOver: (event) => {
+              event.preventDefault();
+              if (!orderLocked) setDragActive(true);
+            },
+            onDragLeave: () => setDragActive(false),
+            onDrop: (event) => {
+              event.preventDefault();
+              setDragActive(false);
+              appendCarouselFiles(event.dataTransfer.files);
+            }
+          },
+          h('strong', null, '2) Create Carousel Post'),
+          h('span', null, 'Ρίξε πολλαπλές εικόνες/βίντεο για 1 carousel post'),
+          h(
+            'label',
+            { style: buttonStyle },
+            'Carousel',
+            h('input', {
+              type: 'file',
+              accept: 'image/*,video/*',
+              multiple: true,
+              disabled: orderLocked,
+              style: { display: 'none' },
+              onChange: (event) => {
+                appendCarouselFiles(event.target.files || []);
+                event.target.value = '';
+              }
+            })
+          ),
+          h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, 'Κάθε upload εδώ δημιουργεί ένα νέο carousel post.')
+        )
       ),
       h(
-        'section',
-        { style: sectionStyle },
+        CollapsiblePanel,
+        { title: 'Feed order & carousel (Advanced)' },
         h(
-          'div',
-          { style: sectionTitleRowStyle },
-          h('h2', { style: sectionTitleStyle }, 'Carousel slides order'),
-          h('button', { type: 'button', style: dangerButtonStyle, onClick: clearCarouselUploads, disabled: orderLocked }, 'Καθαρισμός carousel')
-        ),
-        carouselPosts.length === 0
-          ? h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, 'Δεν υπάρχουν carousel posts ακόμα.')
-          : h(
-              'div',
-              { style: { display: 'grid', gap: '0.9rem' } },
-              carouselPosts.map((carouselPost, carouselIndex) =>
-                h(
-                  'article',
-                  { key: carouselPost.id, style: sectionStyle },
-                  h('strong', null, `Carousel Post ${carouselIndex + 1}`),
-                  h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, 'Drag-and-drop για σειρά καρτών μέσα στο carousel.'),
+          'section',
+          { style: sectionStyle },
+          h(
+            'div',
+            { style: sectionTitleRowStyle },
+            h('h2', { style: sectionTitleStyle }, 'Feed order'),
+            h('button', { type: 'button', style: dangerButtonStyle, onClick: clearMedia, disabled: orderLocked }, 'Καθαρισμός single')
+          ),
+          feedPreviewItems.length === 0
+            ? h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, 'Δεν υπάρχουν feed posts ακόμα.')
+            : h(
+                'div',
+                { style: mediaGridStyle },
+                feedPreviewItems.map((feedItem, index) =>
                   h(
                     'div',
-                    { style: mediaGridStyle },
-                    carouselPost.items.map((item, slideIndex) =>
-                      h(
-                        'div',
-                        {
-                          key: item.id,
-                          style: mediaTileStyle,
-                          draggable: !orderLocked,
-                          onDragStart: () => setDraggedCarouselSlideId(`${carouselPost.id}::${item.id}`),
-                          onDragEnd: () => setDraggedCarouselSlideId(''),
-                          onDragOver: (event) => event.preventDefault(),
-                          onDrop: () => handleCarouselSlideDrop(carouselPost.id, item.id)
-                        },
-                        h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, `Slide ${slideIndex + 1}`),
-                        !orderLocked
-                          ? h(
-                              'button',
-                              {
-                                type: 'button',
-                                style: tileRemoveButtonStyle,
-                                title: 'Διαγραφή slide',
-                                onClick: () => removeCarouselMedia(carouselPost.id, item.id)
-                              },
-                              '×'
-                            )
-                          : null,
-                        h(MediaPreview, { item }),
-                        h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, item.file.name)
+                    {
+                      key: feedItem.id,
+                      style: mediaTileStyle,
+                      draggable: !orderLocked,
+                      onDragStart: () => setDraggedId(feedItem.id),
+                      onDragEnd: () => setDraggedId(null),
+                      onDragOver: (event) => event.preventDefault(),
+                      onDrop: () => handleTileDrop(feedItem.id)
+                    },
+                    h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, `Post ${index + 1} • ${feedItem.kind === 'carousel' ? 'Carousel' : 'Single'}`),
+                    !orderLocked
+                      ? h(
+                          'button',
+                          {
+                            type: 'button',
+                            style: tileRemoveButtonStyle,
+                            title: 'Διαγραφή',
+                            onClick: () => (feedItem.kind === 'single' ? removeMedia(feedItem.item.id) : removeCarouselPost(feedItem.carouselPost.id))
+                          },
+                          '×'
+                        )
+                      : null,
+                    feedItem.kind === 'single'
+                      ? h(MediaPreview, { item: feedItem.item })
+                      : h(MediaPreview, { item: feedItem.carouselPost.items[0] }),
+                    h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, feedItem.label)
+                  )
+                )
+              )
+        ),
+        h(
+          'section',
+          { style: sectionStyle },
+          h(
+            'div',
+            { style: sectionTitleRowStyle },
+            h('h2', { style: sectionTitleStyle }, 'Carousel slides order'),
+            h('button', { type: 'button', style: dangerButtonStyle, onClick: clearCarouselUploads, disabled: orderLocked }, 'Καθαρισμός carousel')
+          ),
+          carouselPosts.length === 0
+            ? h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, 'Δεν υπάρχουν carousel posts ακόμα.')
+            : h(
+                'div',
+                { style: { display: 'grid', gap: '0.9rem' } },
+                carouselPosts.map((carouselPost, carouselIndex) =>
+                  h(
+                    'article',
+                    { key: carouselPost.id, style: sectionStyle },
+                    h('strong', null, `Carousel Post ${carouselIndex + 1}`),
+                    h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, 'Drag-and-drop για σειρά καρτών μέσα στο carousel.'),
+                    h(
+                      'div',
+                      { style: mediaGridStyle },
+                      carouselPost.items.map((item, slideIndex) =>
+                        h(
+                          'div',
+                          {
+                            key: item.id,
+                            style: mediaTileStyle,
+                            draggable: !orderLocked,
+                            onDragStart: () => setDraggedCarouselSlideId(`${carouselPost.id}::${item.id}`),
+                            onDragEnd: () => setDraggedCarouselSlideId(''),
+                            onDragOver: (event) => event.preventDefault(),
+                            onDrop: () => handleCarouselSlideDrop(carouselPost.id, item.id)
+                          },
+                          h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, `Slide ${slideIndex + 1}`),
+                          !orderLocked
+                            ? h(
+                                'button',
+                                {
+                                  type: 'button',
+                                  style: tileRemoveButtonStyle,
+                                  title: 'Διαγραφή slide',
+                                  onClick: () => removeCarouselMedia(carouselPost.id, item.id)
+                                },
+                                '×'
+                              )
+                            : null,
+                          h(MediaPreview, { item }),
+                          h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, item.file.name)
+                        )
                       )
                     )
                   )
                 )
               )
-            )
-      ),
-      h(
-        'section',
-        { style: sectionStyle },
-        h('h2', { style: sectionTitleStyle }, '3) Captions'),
-        h(
-          'label',
-          null,
-          h('textarea', {
-            rows: 8,
-            value: captionsText,
-            onChange: (event) => setCaptionsText(event.target.value),
-            placeholder: 'Post 1: Πρώτη λεζάντα\n\nPost 2: Δεύτερη λεζάντα\n\nPost 3: Τρίτη λεζάντα',
-            style: captionStyle
-          })
         ),
-        h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, `Αντιστοιχισμένες λεζάντες feed: ${mappedCaptions}/${plannedFeedPostCount}`),
         h(
-          'div',
-          { style: { display: 'flex', flexWrap: 'wrap', gap: '0.55rem' } },
-          !orderLocked
-            ? h('button', { type: 'button', style: primaryButtonStyle, onClick: () => setOrderLocked(true) }, 'Κλείδωμα σειράς')
-            : h('button', { type: 'button', style: buttonStyle, onClick: () => setOrderLocked(false) }, 'Ξεκλείδωμα'),
-          h('button', { type: 'submit', style: primaryButtonStyle, disabled: busy }, busy ? 'Φόρτωση' : 'Ανέβασμα')
+          'section',
+          { style: sectionStyle },
+          h('h2', { style: sectionTitleStyle }, '3) Captions'),
+          h(
+            'label',
+            null,
+            h('textarea', {
+              rows: 8,
+              value: captionsText,
+              onChange: (event) => setCaptionsText(event.target.value),
+              placeholder: 'Post 1: Πρώτη λεζάντα\n\nPost 2: Δεύτερη λεζάντα\n\nPost 3: Τρίτη λεζάντα',
+              style: captionStyle
+            })
+          ),
+          h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, `Αντιστοιχισμένες λεζάντες feed: ${mappedCaptions}/${plannedFeedPostCount}`),
+          h(
+            'div',
+            { style: actionRowStyle },
+            !orderLocked
+              ? h('button', { type: 'button', style: primaryButtonStyle, onClick: () => setOrderLocked(true) }, 'Κλείδωμα σειράς')
+              : h('button', { type: 'button', style: buttonStyle, onClick: () => setOrderLocked(false) }, 'Ξεκλείδωμα'),
+            h('button', { type: 'submit', style: primaryButtonStyle, disabled: busy }, busy ? 'Φόρτωση' : 'Ανέβασμα')
+          )
         )
       )
     ),
@@ -484,6 +495,28 @@ export default function InstagramFeedAdmin(props) {
               )
             )
           : null
+      ),
+      h(
+        'section',
+        { style: sectionStyle },
+        h(
+          'div',
+          { style: actionRowStyle },
+          h(
+            'button',
+            {
+              type: 'submit',
+              style: primaryButtonStyle,
+              disabled: busy || (instagramGridItems.length === 0 && instagramStoryItems.length === 0)
+            },
+            busy ? 'Φόρτωση' : 'Ανέβασμα Grid & Stories'
+          )
+        ),
+        h(
+          'small',
+          { style: { color: 'var(--muted)', fontSize: '1.24rem' } },
+          'Μπορείς να ανεβάσεις έξτρα 9άδα ή stories απευθείας από εδώ, χωρίς να ανοίξεις ξανά το Feed order.'
+        )
       )
     )
   );
