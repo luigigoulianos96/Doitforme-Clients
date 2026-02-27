@@ -188,13 +188,12 @@ function InstagramPreviewSection({
           React.createElement(StoryLine, null, instagramPreview.gridCaption)
         )
       : null,
-    React.createElement(
-      PreviewSection,
-      null,
-      React.createElement(PreviewSectionTitle, null, 'Instagram Stories Preview (9:16)'),
-      storyItems.length === 0
-        ? React.createElement(State, null, 'Δεν υπάρχουν stories ακόμα.')
-        : React.createElement(
+    storyItems.length > 0
+      ? React.createElement(
+          PreviewSection,
+          null,
+          React.createElement(PreviewSectionTitle, null, 'Instagram Stories Preview (9:16)'),
+          React.createElement(
             React.Fragment,
             null,
             React.createElement(
@@ -411,7 +410,8 @@ function InstagramPreviewSection({
                 )
               : null
           )
-    )
+        )
+      : null
   );
 }
 

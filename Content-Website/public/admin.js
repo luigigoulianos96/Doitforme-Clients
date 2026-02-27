@@ -407,6 +407,26 @@ const Actions = styled.div`
   gap: 0.6rem;
 `;
 
+const WorkflowActionGroup = styled.section`
+  margin-top: 0.35rem;
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 18%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gloomDark) 34%, transparent), color-mix(in srgb, var(--gloom) 20%, transparent));
+`;
+
+const WorkflowActionMeta = styled.small`
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1.45;
+`;
+
+const WorkflowActionRow = styled(Actions)`
+  align-items: center;
+`;
+
 const ColorChip = styled.button`
   border: 1px solid color-mix(in srgb, var(--greyDark) 36%, transparent);
   border-radius: 999px;
@@ -1997,27 +2017,26 @@ function AdminApp() {
     window.location.href = './portal.html';
   }
 
-  async function handleUpload(event) {
-    event.preventDefault();
+  async function handleFeedUpload() {
     if (!client || !session || !selectedClient) return;
     const clientScope = await validateSelectedClientScope();
     if (!clientScope.ok) return;
 
-    const totalUploads = mediaItems.length + carouselSlideCount + instagramStoryItems.length + instagramGridItems.length;
+    const totalUploads = mediaItems.length + carouselSlideCount;
     const canRefreshExistingFeedOrder = existingFeedOrderItems.length > 0;
     if (totalUploads === 0 && !canRefreshExistingFeedOrder) {
-      setStatus('Βήμα 1: Ανέβασε τουλάχιστον ένα feed post, carousel, story ή png 9άδας.');
+      setStatus('Ανέβασε τουλάχιστον ένα feed post ή carousel.');
       return;
     }
 
     if (requiresLockedFeedOrder && !orderLocked) {
-      setStatus('Βήμα 2: Κλείδωσε την τελική σειρά αναρτήσεων πριν το ανέβασμα.');
+      setStatus('Κλείδωσε τη σειρά feed πριν το ανέβασμα.');
       return;
     }
 
     const captions = parseCaptions(captionsText);
     setBusy(true);
-    setStatus('Γίνεται ανέβασμα και δημιουργία αναρτήσεων...');
+    setStatus('Γίνεται ανέβασμα feed αναρτήσεων...');
 
     const storage = createStorageAdapter();
 
@@ -2026,8 +2045,12 @@ function AdminApp() {
     const carouselById = new Map(carouselPosts.map((carouselPost) => [carouselPost.id, carouselPost]));
     const existingFeedById = new Map(existingFeedPreviewItems.map((item) => [item.id, item]));
     const existingInstagramPosts = posts.filter((post) => parsePostType(post) === 'instagram');
-    const existingStoryPosts = existingInstagramPosts.filter((post) => instagramEntryMeta(post).kind === 'story');
-    const existingGridPosts = existingInstagramPosts.filter((post) => instagramEntryMeta(post).kind === 'grid');
+    const existingStoryPosts = existingInstagramPosts
+      .filter((post) => instagramEntryMeta(post).kind === 'story')
+      .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
+    const existingGridPosts = existingInstagramPosts
+      .filter((post) => instagramEntryMeta(post).kind === 'grid')
+      .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
     const feedPublishItems = feedOrderItems
       .map((orderItem) => {
         if (orderItem.kind === 'single') {
@@ -2180,6 +2203,75 @@ function AdminApp() {
     }
     sortOrderCursor += existingStoryPosts.length;
 
+    for (let i = 0; i < existingGridPosts.length; i += 1) {
+      const updateError = await updatePostSortOrder(existingGridPosts[i].id, sortOrderCursor + i);
+      if (updateError) {
+        setStatus(`Σφάλμα ανανέωσης 9άδας σειράς (${instagramEntryMeta(existingGridPosts[i]).fileName || 'Grid'}): ${updateError.message}`);
+        setBusy(false);
+        return;
+      }
+    }
+    sortOrderCursor += existingGridPosts.length;
+
+    mediaItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    carouselPosts.forEach((carouselPost) => {
+      carouselPost.items.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    });
+    setMediaItems([]);
+    setCarouselPosts([]);
+    setFeedOrderItems([]);
+    setOrderLocked(false);
+    setCaptionsText('');
+    setStatus(
+      `Ολοκληρώθηκε. Ανανεώθηκε η σειρά feed και ανέβηκαν ${mediaItems.length} single, ${carouselPosts.length} carousel posts (${carouselSlideCount} slides).`
+    );
+    await loadPosts();
+    setBusy(false);
+  }
+
+  async function handleStoriesUpload() {
+    if (!client || !session || !selectedClient) return;
+    const clientScope = await validateSelectedClientScope();
+    if (!clientScope.ok) return;
+
+    const totalUploads = instagramStoryItems.length + instagramGridItems.length;
+    if (totalUploads === 0) {
+      setStatus('Ανέβασε τουλάχιστον ένα story ή ένα PNG 9άδας.');
+      return;
+    }
+
+    setBusy(true);
+    setStatus('Γίνεται ανέβασμα stories και 9άδας...');
+
+    const storage = createStorageAdapter();
+    const dynamicUsername = (selectedClient?.slug || selectedClient?.name || '').trim();
+    const existingInstagramPosts = posts.filter((post) => parsePostType(post) === 'instagram');
+    const existingFeedPosts = existingInstagramPosts.filter((post) => {
+      const kind = instagramEntryMeta(post).kind;
+      return kind !== 'story' && kind !== 'grid';
+    });
+    const existingStoryPosts = existingInstagramPosts
+      .filter((post) => instagramEntryMeta(post).kind === 'story')
+      .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
+    const existingGridPosts = existingInstagramPosts
+      .filter((post) => instagramEntryMeta(post).kind === 'grid')
+      .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
+
+    let sortOrderCursor = existingFeedPosts.reduce(
+      (max, post) => Math.max(max, Number(post.sort_order) || 0),
+      0
+    ) + 1;
+
+    for (let i = 0; i < existingStoryPosts.length; i += 1) {
+      const updateError = await updatePostSortOrder(existingStoryPosts[i].id, sortOrderCursor + i);
+      if (updateError) {
+        setStatus(`Σφάλμα ανανέωσης story σειράς (${instagramEntryMeta(existingStoryPosts[i]).fileName || 'Story'}): ${updateError.message}`);
+        setBusy(false);
+        return;
+      }
+    }
+    sortOrderCursor += existingStoryPosts.length;
+
     for (let i = 0; i < instagramStoryItems.length; i += 1) {
       const storyItem = instagramStoryItems[i];
       const file = storyItem.file;
@@ -2259,21 +2351,12 @@ function AdminApp() {
       }
     }
 
-    mediaItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    carouselPosts.forEach((carouselPost) => {
-      carouselPost.items.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    });
     instagramStoryItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
     instagramGridItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    setMediaItems([]);
-    setCarouselPosts([]);
-    setFeedOrderItems([]);
     setInstagramStoryItems([]);
     setInstagramGridItems([]);
-    setOrderLocked(false);
-    setCaptionsText('');
     setStatus(
-      `Ολοκληρώθηκε. Ανανεώθηκε η σειρά feed και ανέβηκαν ${mediaItems.length} single, ${carouselPosts.length} carousel posts (${carouselSlideCount} slides), ${instagramStoryItems.length} stories.`
+      `Ολοκληρώθηκε. Ανέβηκαν ${instagramStoryItems.length} stories${instagramGridItems.length > 0 ? ' και 1 αρχείο 9άδας' : ''}.`
     );
     await loadPosts();
     setBusy(false);
@@ -2825,7 +2908,6 @@ function AdminApp() {
         <AppStyle />
         <Page>
           <Hero>
-            <Eyebrow>ΠΙΝΑΚΑΣ ΔΙΑΧΕΙΡΙΣΗΣ</Eyebrow>
             <Title>Λείπει client scope</Title>
             <Subtitle>Άνοιξε τον admin από το portal για να φορτώσει συγκεκριμένο client feed.</Subtitle>
             <Actions>
@@ -2845,10 +2927,9 @@ function AdminApp() {
       <Page>
         <Hero>
           <HeroTop>
-            <ActionButton type="button" onClick={() => window.open('./portal.html', '_blank', 'noopener,noreferrer')}>📋 Portal</ActionButton>
-            <ActionButton type="button" onClick={handleSignOut}>⇢ Αποσύνδεση</ActionButton>
+            <ActionButton type="button" onClick={() => window.open('./portal.html', '_blank', 'noopener,noreferrer')}>Portal</ActionButton>
+            <ActionButton type="button" onClick={handleSignOut}>Αποσύνδεση</ActionButton>
           </HeroTop>
-          <Eyebrow>ΠΙΝΑΚΑΣ ΔΙΑΧΕΙΡΙΣΗΣ</Eyebrow>
           <Title>Ανέβασμα Περιεχομένου: {selectedClient?.name || 'Client'}</Title>
           <Subtitle>Instagram, Άρθρα και Logo Kit για τον ίδιο client, με ξεχωριστό preview link ανά tab.</Subtitle>
           <TabRow>
@@ -2897,7 +2978,8 @@ function AdminApp() {
               }
               appendInstagramStories={appendInstagramStories}
               removeInstagramStoryItem={removeInstagramStoryItem}
-              onSubmit={handleUpload}
+              onSubmitFeed={handleFeedUpload}
+              onSubmitStories={handleStoriesUpload}
             />
           )}
 
@@ -3242,14 +3324,21 @@ function AdminApp() {
             </Form>
           )}
 
-          <Actions>
-            <ActionButton type="button" disabled={!hasPublishedPosts} onClick={() => openClientPreviewTab(activeTab)}>
-              {activeTab === 'instagram' ? 'Προεπισκόπηση' : 'Preview'}
-            </ActionButton>
-            <ActionButton type="button" disabled={!hasPublishedPosts} onClick={() => copyClientShareLink(activeTab)}>
-              {activeTab === 'instagram' ? '⧉ Αντιγραφή συνδέσμου' : 'Link'}
-            </ActionButton>
-          </Actions>
+          <WorkflowActionGroup>
+            <WorkflowActionMeta>
+              {activeTab === 'instagram'
+                ? 'Τελικές ενέργειες για preview και άμεσο share του τρέχοντος tab.'
+                : 'Τελικές ενέργειες για preview και share του τρέχοντος tab.'}
+            </WorkflowActionMeta>
+            <WorkflowActionRow>
+              <ActionButton type="button" disabled={!hasPublishedPosts} onClick={() => openClientPreviewTab(activeTab)}>
+                {activeTab === 'instagram' ? 'Προεπισκόπηση' : 'Preview'}
+              </ActionButton>
+              <ActionButton type="button" disabled={!hasPublishedPosts} onClick={() => copyClientShareLink(activeTab)}>
+                {activeTab === 'instagram' ? '⧉ Αντιγραφή συνδέσμου' : 'Link'}
+              </ActionButton>
+            </WorkflowActionRow>
+          </WorkflowActionGroup>
 
           {status && <State $tone={inferStatusTone(status)}>{status}</State>}
           {!hasPublishedPosts && <State $tone="warning">Η προεπισκόπηση για το tab "{CONTENT_TABS[activeTab]}" ενεργοποιείται μετά το πρώτο upload.</State>}
