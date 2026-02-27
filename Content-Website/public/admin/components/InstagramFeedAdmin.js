@@ -384,6 +384,7 @@ export default function InstagramFeedAdmin(props) {
     hasDraftSingleUploads,
     hasDraftCarouselUploads,
     requiresLockedFeedOrder,
+    hasPendingFeedChanges,
     appendInstagramGridFiles,
     clearInstagramGrid,
     appendInstagramStories,
@@ -702,7 +703,18 @@ export default function InstagramFeedAdmin(props) {
               : requiresLockedFeedOrder
                 ? h('button', { type: 'button', style: buttonStyle, onClick: () => setOrderLocked(false) }, 'Ξεκλείδωμα')
                 : null,
-            h('button', { type: 'button', style: primaryButtonStyle, disabled: busy, onClick: onSubmitFeed }, busy ? 'Φόρτωση' : 'Ανέβασμα')
+            hasPendingFeedChanges
+              ? h(
+                  'button',
+                  {
+                    type: 'button',
+                    style: primaryButtonStyle,
+                    disabled: busy,
+                    onClick: onSubmitFeed
+                  },
+                  busy ? 'Φόρτωση' : 'Ανέβασμα'
+                )
+              : null
           )
         )
       )
@@ -835,24 +847,26 @@ export default function InstagramFeedAdmin(props) {
             )
           : null
       ),
-      h(
-        'section',
-        { style: groupedActionSectionStyle },
-        h(
-          'div',
-          { style: ctaActionRowStyle },
-          h(
-            'button',
-            {
-              type: 'button',
-              style: ctaButtonStyle,
-              disabled: busy || (instagramGridItems.length === 0 && instagramStoryItems.length === 0),
-              onClick: onSubmitStories
-            },
-            busy ? 'Φόρτωση' : 'Ανέβασμα'
+      instagramGridItems.length > 0 || instagramStoryItems.length > 0
+        ? h(
+            'section',
+            { style: groupedActionSectionStyle },
+            h(
+              'div',
+              { style: ctaActionRowStyle },
+              h(
+                'button',
+                {
+                  type: 'button',
+                  style: ctaButtonStyle,
+                  disabled: busy,
+                  onClick: onSubmitStories
+                },
+                busy ? 'Φόρτωση' : 'Ανέβασμα'
+              )
+            )
           )
-        )
-      )
+        : null
     )
   );
 }

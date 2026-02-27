@@ -2969,6 +2969,7 @@ function AdminApp() {
               hasDraftSingleUploads={hasDraftSingleUploads}
               hasDraftCarouselUploads={hasDraftCarouselUploads}
               requiresLockedFeedOrder={requiresLockedFeedOrder}
+              hasPendingFeedChanges={hasDraftFeedItems || hasExistingFeedReorder}
               appendInstagramGridFiles={appendInstagramGridFiles}
               clearInstagramGrid={() =>
                 setInstagramGridItems((prev) => {
