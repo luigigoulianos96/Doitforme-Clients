@@ -2,6 +2,8 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
+    { "source": "/api/storage/presign-upload", "destination": "/api/storage/presign-upload.js" },
+    { "source": "/api/storage/delete", "destination": "/api/storage/delete.js" },
     { "source": "/", "destination": "/public/portal.html" },
     { "source": "/portal", "destination": "/public/portal.html" },
     { "source": "/admin", "destination": "/public/admin.html" },

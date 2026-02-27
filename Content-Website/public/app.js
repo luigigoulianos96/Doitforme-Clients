@@ -58,6 +58,7 @@ function App() {
       <ArticlePreviewSection
         status={status}
         previewMode={previewMode}
+        clientMeta={clientMeta}
         filteredPosts={filteredPosts}
         savingId={savingId}
         updateReview={updateReview}
@@ -69,6 +70,7 @@ function App() {
       <InstagramPreviewSection
         status={status}
         previewMode={previewMode}
+        clientMeta={clientMeta}
         instagramPreview={instagramPreview}
         savingId={savingId}
         updateReview={updateReview}

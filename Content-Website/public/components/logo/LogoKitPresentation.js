@@ -238,9 +238,10 @@ function LogoKitPresentation({
   }
 
   async function handleDecision(nextStatus) {
+    const existingClientNotes = `${logoKit.client_notes || ''}`.trim();
     const payload = {
       approval_status: nextStatus,
-      client_notes: nextStatus === 'approved' ? '' : trimmedNotes
+      client_notes: trimmedNotes || existingClientNotes
     };
     const successLabel = nextStatus === 'approved' ? 'Το logo kit εγκρίθηκε.' : 'Το logo kit απορρίφθηκε.';
     const ok = await onUpdateLogoKitReview(payload, successLabel);

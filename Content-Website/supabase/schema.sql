@@ -34,6 +34,10 @@ create table if not exists public.clients (
 alter table public.posts
   add column if not exists approval_status text not null default 'pending' check (approval_status in ('pending', 'approved', 'disapproved')),
   add column if not exists client_notes text not null default '',
+  add column if not exists client_feedback_image_url text not null default '',
+  add column if not exists client_feedback_image_path text not null default '',
+  add column if not exists client_feedback_audio_url text not null default '',
+  add column if not exists client_feedback_audio_path text not null default '',
   add column if not exists client_id uuid references public.clients(id);
 
 create index if not exists posts_status_sort_idx on public.posts(status, sort_order, created_at desc);
@@ -51,7 +55,14 @@ for select
 using (status = 'published');
 
 -- Public reviewers can only update approval fields for published posts
-grant update (approval_status, client_notes) on public.posts to anon, authenticated;
+grant update (
+  approval_status,
+  client_notes,
+  client_feedback_image_url,
+  client_feedback_image_path,
+  client_feedback_audio_url,
+  client_feedback_audio_path
+) on public.posts to anon, authenticated;
 
 drop policy if exists "Public can submit approvals on published posts" on public.posts;
 create policy "Public can submit approvals on published posts"

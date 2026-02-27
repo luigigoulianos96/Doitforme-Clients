@@ -4,6 +4,7 @@ import { Feed, State } from '../../core/styles/App.styles.js';
 function ArticlePreviewSection({
   status,
   previewMode,
+  clientMeta,
   filteredPosts,
   savingId,
   updateReview,
@@ -33,7 +34,8 @@ function ArticlePreviewSection({
                   onUpdateReview: updateReview,
                   historyEntries: notesHistoryByPost[post.id] || [],
                   onAppendHistory: appendNoteHistory,
-                  previewMode
+                  previewMode,
+                  clientName: clientMeta?.name || ''
                 })
               )
         )
