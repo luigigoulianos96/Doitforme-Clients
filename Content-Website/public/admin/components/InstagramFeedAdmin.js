@@ -168,6 +168,9 @@ export default function InstagramFeedAdmin(props) {
     removeMedia,
     clearMedia,
     clearCarouselUploads,
+    hasDraftSingleUploads,
+    hasDraftCarouselUploads,
+    requiresLockedFeedOrder,
     appendInstagramGridFiles,
     clearInstagramGrid,
     appendInstagramStories,
@@ -180,11 +183,10 @@ export default function InstagramFeedAdmin(props) {
     { onSubmit, style: formStyle },
     h(
       CollapsiblePanel,
-      { title: 'Instagram posts & Carousel' },
+      { title: 'Αναρτήσεις Feed' },
       h(
         'section',
         { style: sectionStyle },
-        h('h2', { style: sectionTitleStyle }, 'Primary workflow'),
         h(
           'div',
           {
@@ -200,8 +202,8 @@ export default function InstagramFeedAdmin(props) {
               appendFiles(event.dataTransfer.files);
             }
           },
-          h('strong', null, '1) Upload Feed Media'),
-          h('span', null, 'Ρίξε media για Feed εδώ (single post)'),
+          h('strong', null, 'Ανέβασμα post'),
+          h('span', null, 'Εικόνα ή βίντεο'),
           h(
             'label',
             { style: buttonStyle },
@@ -235,8 +237,8 @@ export default function InstagramFeedAdmin(props) {
               appendCarouselFiles(event.dataTransfer.files);
             }
           },
-          h('strong', null, '2) Create Carousel Post'),
-          h('span', null, 'Ρίξε πολλαπλές εικόνες/βίντεο για 1 carousel post'),
+          h('strong', null, 'Ανέβασμα Carousel'),
+          h('span', null, 'Πολλαπλά αρχεία για ένα post'),
           h(
             'label',
             { style: buttonStyle },
@@ -258,7 +260,7 @@ export default function InstagramFeedAdmin(props) {
       ),
       h(
         CollapsiblePanel,
-        { title: 'Feed order & carousel (Advanced)' },
+        { title: 'Σειρά Feed' },
         h(
           'section',
           { style: sectionStyle },
@@ -266,7 +268,9 @@ export default function InstagramFeedAdmin(props) {
             'div',
             { style: sectionTitleRowStyle },
             h('h2', { style: sectionTitleStyle }, 'Feed order'),
-            h('button', { type: 'button', style: dangerButtonStyle, onClick: clearMedia, disabled: orderLocked }, 'Καθαρισμός single')
+            hasDraftSingleUploads
+              ? h('button', { type: 'button', style: dangerButtonStyle, onClick: clearMedia, disabled: orderLocked }, 'Καθαρισμός single')
+              : null
           ),
           feedPreviewItems.length === 0
             ? h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, 'Δεν υπάρχουν feed posts ακόμα.')
@@ -286,21 +290,19 @@ export default function InstagramFeedAdmin(props) {
                       onDrop: () => handleTileDrop(feedItem.id)
                     },
                     h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, `Post ${index + 1} • ${feedItem.kind === 'carousel' ? 'Carousel' : 'Single'}`),
-                    !orderLocked
+                    !orderLocked && feedItem.removable
                       ? h(
                           'button',
                           {
                             type: 'button',
                             style: tileRemoveButtonStyle,
                             title: 'Διαγραφή',
-                            onClick: () => (feedItem.kind === 'single' ? removeMedia(feedItem.item.id) : removeCarouselPost(feedItem.carouselPost.id))
+                            onClick: () => (feedItem.kind === 'single' ? removeMedia(feedItem.removeId) : removeCarouselPost(feedItem.removeId))
                           },
                           '×'
                         )
                       : null,
-                    feedItem.kind === 'single'
-                      ? h(MediaPreview, { item: feedItem.item })
-                      : h(MediaPreview, { item: feedItem.carouselPost.items[0] }),
+                    h(MediaPreview, { item: feedItem.previewMedia }),
                     h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, feedItem.label)
                   )
                 )
@@ -313,7 +315,9 @@ export default function InstagramFeedAdmin(props) {
             'div',
             { style: sectionTitleRowStyle },
             h('h2', { style: sectionTitleStyle }, 'Carousel slides order'),
-            h('button', { type: 'button', style: dangerButtonStyle, onClick: clearCarouselUploads, disabled: orderLocked }, 'Καθαρισμός carousel')
+            hasDraftCarouselUploads
+              ? h('button', { type: 'button', style: dangerButtonStyle, onClick: clearCarouselUploads, disabled: orderLocked }, 'Καθαρισμός carousel')
+              : null
           ),
           carouselPosts.length === 0
             ? h('small', { style: { color: 'var(--muted)', fontSize: '1.24rem' } }, 'Δεν υπάρχουν carousel posts ακόμα.')
@@ -382,9 +386,11 @@ export default function InstagramFeedAdmin(props) {
           h(
             'div',
             { style: actionRowStyle },
-            !orderLocked
+            requiresLockedFeedOrder && !orderLocked
               ? h('button', { type: 'button', style: primaryButtonStyle, onClick: () => setOrderLocked(true) }, 'Κλείδωμα σειράς')
-              : h('button', { type: 'button', style: buttonStyle, onClick: () => setOrderLocked(false) }, 'Ξεκλείδωμα'),
+              : requiresLockedFeedOrder
+                ? h('button', { type: 'button', style: buttonStyle, onClick: () => setOrderLocked(false) }, 'Ξεκλείδωμα')
+                : null,
             h('button', { type: 'submit', style: primaryButtonStyle, disabled: busy }, busy ? 'Φόρτωση' : 'Ανέβασμα')
           )
         )
@@ -392,7 +398,7 @@ export default function InstagramFeedAdmin(props) {
     ),
     h(
       CollapsiblePanel,
-      { title: 'Grid 9 & stories (Advanced)' },
+      { title: 'Stories & 9άδα' },
       h(
         'section',
         { style: sectionStyle },

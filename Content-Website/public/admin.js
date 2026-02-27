@@ -831,7 +831,7 @@ function postReviewStatus(post) {
 function postReviewLabel(state) {
   if (state === 'approved') return 'Εγκρίθηκε';
   if (state === 'rejected') return 'Απορρίφθηκε';
-  if (state === 'awaiting') return 'Σε αναμονή για έγκριση';
+  if (state === 'awaiting') return 'Αναμονή';
   return 'Χρειάζεται αλλαγές';
 }
 
@@ -869,7 +869,7 @@ function queryClientPosts(client, clientId, selectClause) {
 }
 
 const CONTENT_TABS = {
-  instagram: 'Instagram Feed',
+  instagram: 'FB & IG',
   article: 'Άρθρα',
   logo: 'Logo Kit'
 };
@@ -907,6 +907,9 @@ function instagramEntryMeta(post) {
   if (value.startsWith('STORY::')) {
     return { kind: 'story', groupId: '', slideOrder: 0, fileName: value.replace('STORY::', '').trim() };
   }
+  if (value.startsWith('GRID9::')) {
+    return { kind: 'grid', groupId: '', slideOrder: 0, fileName: value.replace('GRID9::', '').trim() };
+  }
   if (value.startsWith('CAROUSEL::')) {
     const parts = value.split('::');
     const groupId = `${parts[1] || ''}`.trim();
@@ -918,6 +921,10 @@ function instagramEntryMeta(post) {
     return { kind: 'single', groupId: '', slideOrder: 1, fileName: value.replace('SINGLE::', '').trim() };
   }
   return { kind: 'single', groupId: '', slideOrder: 1, fileName: value };
+}
+
+function isExistingFeedOrderEntry(item) {
+  return item?.kind === 'existing-single' || item?.kind === 'existing-carousel';
 }
 
 function isInstagramGridFile(file) {
@@ -1275,6 +1282,15 @@ function AdminApp() {
     }
 
     setLogoKits(data || []);
+  }
+
+  async function updatePostSortOrder(postId, sortOrder) {
+    const { error } = await client
+      .from('posts')
+      .update({ sort_order: sortOrder })
+      .eq('id', postId);
+
+    return error;
   }
 
   function appendFiles(files) {
@@ -1988,19 +2004,18 @@ function AdminApp() {
     if (!clientScope.ok) return;
 
     const totalUploads = mediaItems.length + carouselSlideCount + instagramStoryItems.length + instagramGridItems.length;
-    if (totalUploads === 0) {
+    const canRefreshExistingFeedOrder = existingFeedOrderItems.length > 0;
+    if (totalUploads === 0 && !canRefreshExistingFeedOrder) {
       setStatus('Βήμα 1: Ανέβασε τουλάχιστον ένα feed post, carousel, story ή png 9άδας.');
       return;
     }
 
-    if (feedOrderItems.length > 0 && !orderLocked) {
+    if (requiresLockedFeedOrder && !orderLocked) {
       setStatus('Βήμα 2: Κλείδωσε την τελική σειρά αναρτήσεων πριν το ανέβασμα.');
       return;
     }
 
     const captions = parseCaptions(captionsText);
-    const highestSortOrder = posts.reduce((max, post) => Math.max(max, post.sort_order || 0), 0);
-    const nextSortOrderStart = highestSortOrder + 1;
     setBusy(true);
     setStatus('Γίνεται ανέβασμα και δημιουργία αναρτήσεων...');
 
@@ -2009,25 +2024,71 @@ function AdminApp() {
     const dynamicUsername = (selectedClient?.slug || selectedClient?.name || '').trim();
     const mediaById = new Map(mediaItems.map((item) => [item.id, item]));
     const carouselById = new Map(carouselPosts.map((carouselPost) => [carouselPost.id, carouselPost]));
+    const existingFeedById = new Map(existingFeedPreviewItems.map((item) => [item.id, item]));
+    const existingInstagramPosts = posts.filter((post) => parsePostType(post) === 'instagram');
+    const existingStoryPosts = existingInstagramPosts.filter((post) => instagramEntryMeta(post).kind === 'story');
+    const existingGridPosts = existingInstagramPosts.filter((post) => instagramEntryMeta(post).kind === 'grid');
     const feedPublishItems = feedOrderItems
       .map((orderItem) => {
         if (orderItem.kind === 'single') {
           const item = mediaById.get(orderItem.refId);
           if (!item) return null;
-          const sourceIndex = mediaItems.findIndex((sourceItem) => sourceItem.id === item.id);
-          return { kind: 'single', item, sourceIndex };
+          return { kind: 'new-single', item };
         }
-        const carouselPost = carouselById.get(orderItem.refId);
-        if (!carouselPost) return null;
-        return { kind: 'carousel', carouselPost };
+
+        if (orderItem.kind === 'carousel') {
+          const carouselPost = carouselById.get(orderItem.refId);
+          if (!carouselPost) return null;
+          return { kind: 'new-carousel', carouselPost };
+        }
+
+        if (orderItem.kind === 'existing-single') {
+          const existingItem = existingFeedById.get(orderItem.id);
+          if (!existingItem) return null;
+          return { kind: 'existing-single', existingItem };
+        }
+
+        if (orderItem.kind === 'existing-carousel') {
+          const existingItem = existingFeedById.get(orderItem.id);
+          if (!existingItem) return null;
+          return { kind: 'existing-carousel', existingItem };
+        }
+
+        return null;
       })
       .filter(Boolean);
 
-    let sortOrderCursor = nextSortOrderStart;
+    let sortOrderCursor = 1;
+    let draftCaptionCursor = 0;
     for (let feedIndex = 0; feedIndex < feedPublishItems.length; feedIndex += 1) {
       const feedItem = feedPublishItems[feedIndex];
 
-      if (feedItem.kind === 'single') {
+      if (feedItem.kind === 'existing-single') {
+        const targetPost = feedItem.existingItem.posts[0];
+        const updateError = await updatePostSortOrder(targetPost.id, sortOrderCursor);
+        if (updateError) {
+          setStatus(`Σφάλμα ανανέωσης σειράς (${feedItem.existingItem.label}): ${updateError.message}`);
+          setBusy(false);
+          return;
+        }
+        sortOrderCursor += 1;
+        continue;
+      }
+
+      if (feedItem.kind === 'existing-carousel') {
+        for (let slideIndex = 0; slideIndex < feedItem.existingItem.posts.length; slideIndex += 1) {
+          const updateError = await updatePostSortOrder(feedItem.existingItem.posts[slideIndex].id, sortOrderCursor);
+          if (updateError) {
+            setStatus(`Σφάλμα ανανέωσης σειράς (${feedItem.existingItem.label}): ${updateError.message}`);
+            setBusy(false);
+            return;
+          }
+        }
+        sortOrderCursor += 1;
+        continue;
+      }
+
+      if (feedItem.kind === 'new-single') {
         const file = feedItem.item.file;
         const fileName = `${Date.now()}-single-${feedIndex}-${slugFilename(file.name)}`;
         const path = `${session.user.id}/${fileName}`;
@@ -2045,13 +2106,13 @@ function AdminApp() {
           title: makeTypedTitle('instagram', `SINGLE::${file.name}`),
           image_url: publicData.publicUrl,
           image_path: path,
-          caption: captions[feedIndex] || `Post ${feedIndex + 1}: Η λεζάντα εκκρεμεί.`,
+          caption: captions[draftCaptionCursor] || `Post ${draftCaptionCursor + 1}: Η λεζάντα εκκρεμεί.`,
           client_id: clientScope.value.id,
           status: 'published',
           approval_status: 'pending',
           client_notes: '',
           username: dynamicUsername,
-          like_count: 160 + feedItem.sourceIndex * 20,
+          like_count: 160 + draftCaptionCursor * 20,
           sort_order: sortOrderCursor
         };
         const { error: insertError } = await client.from('posts').insert(payload);
@@ -2060,12 +2121,14 @@ function AdminApp() {
           setBusy(false);
           return;
         }
+        draftCaptionCursor += 1;
         sortOrderCursor += 1;
+        continue;
       }
 
-      if (feedItem.kind === 'carousel') {
+      if (feedItem.kind === 'new-carousel') {
         const carouselGroupId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const carouselCaption = captions[feedIndex] || `Carousel ${feedIndex + 1}: Η λεζάντα εκκρεμεί.`;
+        const carouselCaption = captions[draftCaptionCursor] || `Carousel ${draftCaptionCursor + 1}: Η λεζάντα εκκρεμεί.`;
 
         for (let slideIndex = 0; slideIndex < feedItem.carouselPost.items.length; slideIndex += 1) {
           const slide = feedItem.carouselPost.items[slideIndex];
@@ -2102,9 +2165,20 @@ function AdminApp() {
             return;
           }
         }
+        draftCaptionCursor += 1;
         sortOrderCursor += 1;
       }
     }
+
+    for (let i = 0; i < existingStoryPosts.length; i += 1) {
+      const updateError = await updatePostSortOrder(existingStoryPosts[i].id, sortOrderCursor + i);
+      if (updateError) {
+        setStatus(`Σφάλμα ανανέωσης story σειράς (${instagramEntryMeta(existingStoryPosts[i]).fileName || 'Story'}): ${updateError.message}`);
+        setBusy(false);
+        return;
+      }
+    }
+    sortOrderCursor += existingStoryPosts.length;
 
     for (let i = 0; i < instagramStoryItems.length; i += 1) {
       const storyItem = instagramStoryItems[i];
@@ -2140,6 +2214,17 @@ function AdminApp() {
         return;
       }
     }
+    sortOrderCursor += instagramStoryItems.length;
+
+    for (let i = 0; i < existingGridPosts.length; i += 1) {
+      const updateError = await updatePostSortOrder(existingGridPosts[i].id, sortOrderCursor + i);
+      if (updateError) {
+        setStatus(`Σφάλμα ανανέωσης 9άδας σειράς (${instagramEntryMeta(existingGridPosts[i]).fileName || 'Grid'}): ${updateError.message}`);
+        setBusy(false);
+        return;
+      }
+    }
+    sortOrderCursor += existingGridPosts.length;
 
     if (instagramGridItems.length > 0) {
       const gridItem = instagramGridItems[0];
@@ -2164,7 +2249,7 @@ function AdminApp() {
         client_notes: '',
         username: dynamicUsername,
         like_count: 0,
-        sort_order: sortOrderCursor + instagramStoryItems.length + 1
+        sort_order: sortOrderCursor
       };
       const { error: insertError } = await client.from('posts').insert(payload);
       if (insertError) {
@@ -2187,7 +2272,9 @@ function AdminApp() {
     setInstagramGridItems([]);
     setOrderLocked(false);
     setCaptionsText('');
-    setStatus(`Ολοκληρώθηκε. Ανέβηκαν ${mediaItems.length} single, ${carouselPosts.length} carousel posts (${carouselSlideCount} slides), ${instagramStoryItems.length} stories.`);
+    setStatus(
+      `Ολοκληρώθηκε. Ανανεώθηκε η σειρά feed και ανέβηκαν ${mediaItems.length} single, ${carouselPosts.length} carousel posts (${carouselSlideCount} slides), ${instagramStoryItems.length} stories.`
+    );
     await loadPosts();
     setBusy(false);
   }
@@ -2199,7 +2286,7 @@ function AdminApp() {
 
   function openClientPreviewTab(contentType = activeTab) {
     if (!selectedClient) return;
-    window.open(`./index.html?client=${encodeURIComponent(selectedClient.slug)}&mode=${contentType}`, '_blank', 'noopener,noreferrer');
+    window.open(createPreviewUrl(contentType), '_blank', 'noopener,noreferrer');
   }
 
   async function copyClientShareLink(contentType = activeTab) {
@@ -2499,6 +2586,125 @@ function AdminApp() {
     setBusy(false);
   }
 
+  const existingFeedPreviewItems = useMemo(() => {
+    const next = [];
+    const carouselEntries = new Map();
+
+    posts
+      .filter((post) => parsePostType(post) === 'instagram')
+      .forEach((post) => {
+        const meta = instagramEntryMeta(post);
+
+        if (meta.kind === 'story' || meta.kind === 'grid') return;
+
+        if (meta.kind === 'carousel') {
+          const groupId = meta.groupId || post.id;
+          let entry = carouselEntries.get(groupId);
+
+          if (!entry) {
+            entry = {
+              id: `existing-carousel:${groupId}`,
+              kind: 'existing-carousel',
+              refId: groupId,
+              label: '',
+              removable: false,
+              previewMedia: {
+                kind: isVideoPost(post) ? 'video' : 'image',
+                previewUrl: post.image_url,
+                file: { name: meta.fileName || `Carousel ${groupId}` }
+              },
+              posts: [],
+              sortOrder: Number.isFinite(post.sort_order) ? post.sort_order : 0
+            };
+            carouselEntries.set(groupId, entry);
+            next.push(entry);
+          }
+
+          entry.posts.push(post);
+          entry.sortOrder = Math.min(entry.sortOrder, Number.isFinite(post.sort_order) ? post.sort_order : entry.sortOrder);
+          return;
+        }
+
+        next.push({
+          id: `existing-single:${post.id}`,
+          kind: 'existing-single',
+          refId: post.id,
+          label: meta.fileName || stripPostTypePrefix(post.title),
+          removable: false,
+          previewMedia: {
+            kind: isVideoPost(post) ? 'video' : 'image',
+            previewUrl: post.image_url,
+            file: { name: meta.fileName || stripPostTypePrefix(post.title) || 'Feed post' }
+          },
+          posts: [post],
+          sortOrder: Number.isFinite(post.sort_order) ? post.sort_order : 0
+        });
+      });
+
+    next.forEach((entry) => {
+      if (entry.kind !== 'existing-carousel') return;
+
+      entry.posts.sort((a, b) => {
+        const aMeta = instagramEntryMeta(a);
+        const bMeta = instagramEntryMeta(b);
+        return aMeta.slideOrder - bMeta.slideOrder;
+      });
+      entry.label = `Carousel (${entry.posts.length} slides)`;
+    });
+
+    return next;
+  }, [posts]);
+
+  const existingFeedOrderItems = useMemo(
+    () => existingFeedPreviewItems.map((item) => ({ id: item.id, kind: item.kind, refId: item.refId })),
+    [existingFeedPreviewItems]
+  );
+
+  const existingFeedPreviewMap = useMemo(
+    () => new Map(existingFeedPreviewItems.map((item) => [item.id, item])),
+    [existingFeedPreviewItems]
+  );
+
+  useEffect(() => {
+    setFeedOrderItems((prev) => {
+      const preservedDraftItems = prev.filter((item) => !isExistingFeedOrderEntry(item));
+      const knownEntries = new Map([
+        ...existingFeedOrderItems.map((item) => [item.id, item]),
+        ...preservedDraftItems.map((item) => [item.id, item])
+      ]);
+      const next = [];
+      const seen = new Set();
+
+      prev.forEach((item) => {
+        const resolved = knownEntries.get(item.id);
+        if (!resolved || seen.has(item.id)) return;
+        next.push(resolved);
+        seen.add(item.id);
+      });
+
+      existingFeedOrderItems.forEach((item) => {
+        if (seen.has(item.id)) return;
+        next.push(item);
+        seen.add(item.id);
+      });
+
+      preservedDraftItems.forEach((item) => {
+        if (seen.has(item.id)) return;
+        next.push(item);
+        seen.add(item.id);
+      });
+
+      if (
+        next.length === prev.length &&
+        next.every((item, index) => item.id === prev[index]?.id && item.kind === prev[index]?.kind && item.refId === prev[index]?.refId)
+      ) {
+        return prev;
+      }
+
+      return next;
+    });
+  }, [existingFeedOrderItems]);
+
   const feedPreviewItems = useMemo(() => {
     const mediaById = new Map(mediaItems.map((item) => [item.id, item]));
     const carouselById = new Map(carouselPosts.map((carouselPost) => [carouselPost.id, carouselPost]));
@@ -2512,26 +2718,47 @@ function AdminApp() {
             id: orderItem.id,
             kind: 'single',
             label: item.file.name,
-            item
+            removable: true,
+            removeId: item.id,
+            previewMedia: item
           };
         }
 
-        const carouselPost = carouselById.get(orderItem.refId);
-        if (!carouselPost) return null;
+        if (orderItem.kind === 'carousel') {
+          const carouselPost = carouselById.get(orderItem.refId);
+          if (!carouselPost) return null;
+          return {
+            id: orderItem.id,
+            kind: 'carousel',
+            label: `Carousel (${carouselPost.items.length} slides)`,
+            removable: true,
+            removeId: carouselPost.id,
+            previewMedia: carouselPost.items[0]
+          };
+        }
+
+        const existingItem = existingFeedPreviewMap.get(orderItem.id);
+        if (!existingItem) return null;
         return {
-          id: orderItem.id,
-          kind: 'carousel',
-          label: `Carousel (${carouselPost.items.length} slides)`,
-          carouselPost
+          ...existingItem,
+          kind: existingItem.kind === 'existing-carousel' ? 'carousel' : 'single'
         };
       })
       .filter(Boolean);
-  }, [feedOrderItems, mediaItems, carouselPosts]);
+  }, [feedOrderItems, mediaItems, carouselPosts, existingFeedPreviewMap]);
 
   const parsedCaptions = useMemo(() => parseCaptions(captionsText), [captionsText]);
-  const plannedFeedPostCount = feedPreviewItems.length;
+  const plannedFeedPostCount = feedOrderItems.filter((item) => item.kind === 'single' || item.kind === 'carousel').length;
   const carouselSlideCount = carouselPosts.reduce((sum, carouselPost) => sum + carouselPost.items.length, 0);
   const mappedCaptions = Array.from({ length: plannedFeedPostCount }).reduce((sum, _item, index) => sum + (parsedCaptions[index] ? 1 : 0), 0);
+  const hasDraftSingleUploads = mediaItems.length > 0;
+  const hasDraftCarouselUploads = carouselPosts.length > 0;
+  const hasDraftFeedItems = feedOrderItems.some((item) => item.kind === 'single' || item.kind === 'carousel');
+  const currentExistingFeedOrderIds = feedOrderItems.filter((item) => isExistingFeedOrderEntry(item)).map((item) => item.id);
+  const hasExistingFeedReorder =
+    currentExistingFeedOrderIds.length === existingFeedOrderItems.length &&
+    currentExistingFeedOrderIds.some((id, index) => id !== existingFeedOrderItems[index]?.id);
+  const requiresLockedFeedOrder = hasDraftFeedItems || hasExistingFeedReorder;
   const scopedPosts = useMemo(
     () => posts.filter((post) => parsePostType(post) === activeTab),
     [posts, activeTab]
@@ -2658,6 +2885,9 @@ function AdminApp() {
               removeMedia={removeMedia}
               clearMedia={clearMedia}
               clearCarouselUploads={clearCarouselUploads}
+              hasDraftSingleUploads={hasDraftSingleUploads}
+              hasDraftCarouselUploads={hasDraftCarouselUploads}
+              requiresLockedFeedOrder={requiresLockedFeedOrder}
               appendInstagramGridFiles={appendInstagramGridFiles}
               clearInstagramGrid={() =>
                 setInstagramGridItems((prev) => {
@@ -3014,10 +3244,10 @@ function AdminApp() {
 
           <Actions>
             <ActionButton type="button" disabled={!hasPublishedPosts} onClick={() => openClientPreviewTab(activeTab)}>
-              {activeTab === 'instagram' ? '👁 Άνοιγμα προεπισκόπησης πελάτη' : 'Preview'}
+              {activeTab === 'instagram' ? 'Προεπισκόπηση' : 'Preview'}
             </ActionButton>
             <ActionButton type="button" disabled={!hasPublishedPosts} onClick={() => copyClientShareLink(activeTab)}>
-              {activeTab === 'instagram' ? '⧉ Αντιγραφή share link' : 'Link'}
+              {activeTab === 'instagram' ? '⧉ Αντιγραφή συνδέσμου' : 'Link'}
             </ActionButton>
           </Actions>
 
@@ -3028,9 +3258,9 @@ function AdminApp() {
 
         <List>
           <ListHeader>
-            <ListTitle>{CONTENT_TABS[activeTab]}: Όλα τα στοιχεία</ListTitle>
+            <ListTitle>{activeTab === 'instagram' ? 'Όλο το περιεχόμενο' : `${CONTENT_TABS[activeTab]}: Όλα τα στοιχεία`}</ListTitle>
             <ActionButton type="button" $type="danger" onClick={deleteAllPostsPermanently} disabled={busy || scopedReviewItems.length === 0}>
-              {activeTab === 'instagram' ? '🗑 Οριστική διαγραφή tab' : 'Διαγραφή'}
+              {activeTab === 'instagram' ? 'Οριστική διαγραφή' : 'Διαγραφή'}
             </ActionButton>
           </ListHeader>
 
