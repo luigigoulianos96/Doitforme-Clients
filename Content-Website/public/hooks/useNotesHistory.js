@@ -61,7 +61,12 @@ function useNotesHistory(clientSlug, previewMode) {
   }, [notesStorageKey]);
 
   function appendNoteHistory(postId, text, action) {
-    const hasArticleDiff = action === 'Αλλαγή άρθρου' && text && typeof text === 'object';
+    const hasArticleDiff = Boolean(
+      text &&
+      typeof text === 'object' &&
+      'beforeText' in text &&
+      'afterText' in text
+    );
     const paragraphChanges = hasArticleDiff ? createParagraphDiff(text.beforeText, text.afterText) : [];
     const fallbackText = hasArticleDiff ? '' : text;
     const entry = {

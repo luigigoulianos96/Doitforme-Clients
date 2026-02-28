@@ -170,14 +170,12 @@ export default function useArticleAdmin({
   slugFilename,
   makeTypedTitle
 }) {
-  const [articleDrafts, setArticleDrafts] = useState([
-    createEmptyArticleDraft(`${Date.now()}-article-1`)
-  ]);
+  const [articleDrafts, setArticleDrafts] = useState([]);
 
   const composerState = {
     drafts: articleDrafts,
-    primaryDraft: articleDrafts[0] || null,
-    queuedDrafts: articleDrafts.slice(1),
+    primaryDraft: null,
+    queuedDrafts: articleDrafts,
     readyDraftCount: articleDrafts.filter(
       (draft) => draft.title.trim().length > 0 && draft.body.trim().length > 0
     ).length
@@ -220,9 +218,7 @@ export default function useArticleAdmin({
     setArticleDrafts((prev) => {
       const selected = prev.find((draft) => draft.id === draftId);
       if (selected?.imagePreview) URL.revokeObjectURL(selected.imagePreview);
-      const next = prev.filter((draft) => draft.id !== draftId);
-      if (next.length > 0) return next;
-      return [createEmptyArticleDraft(`${Date.now()}-article-base`)];
+      return prev.filter((draft) => draft.id !== draftId);
     });
   }
 
@@ -238,6 +234,47 @@ export default function useArticleAdmin({
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Δεν έγινε ανάγνωση του αρχείου.');
     }
+  }
+
+  async function importArticleDraftDocuments(files) {
+    const selectedFiles = Array.from(files || []).filter(Boolean);
+    if (selectedFiles.length === 0) return;
+
+    const importedDrafts = [];
+    const failedFiles = [];
+
+    for (const file of selectedFiles) {
+      try {
+        const { title, body } = await parseArticleDocument(file);
+        importedDrafts.push({
+          ...createEmptyArticleDraft(`${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
+          title,
+          body
+        });
+      } catch (error) {
+        failedFiles.push(error instanceof Error ? `${file.name}: ${error.message}` : `${file.name}: Δεν έγινε ανάγνωση του αρχείου.`);
+      }
+    }
+
+    if (importedDrafts.length > 0) {
+      setArticleDrafts((prev) => [...prev, ...importedDrafts]);
+    }
+
+    if (importedDrafts.length > 0 && failedFiles.length === 0) {
+      setStatus(
+        importedDrafts.length === 1
+          ? `Το κείμενο φορτώθηκε από ${selectedFiles[0].name}.`
+          : `Φορτώθηκαν ${importedDrafts.length} αρχεία στα πρόχειρα άρθρα.`
+      );
+      return;
+    }
+
+    if (importedDrafts.length > 0) {
+      setStatus(`Φορτώθηκαν ${importedDrafts.length} αρχεία. ${failedFiles[0]}`);
+      return;
+    }
+
+    setStatus(failedFiles[0] || 'Δεν έγινε ανάγνωση των αρχείων.');
   }
 
   async function publishArticles() {
@@ -305,7 +342,7 @@ export default function useArticleAdmin({
     articleDrafts.forEach((draft) => {
       if (draft.imagePreview) URL.revokeObjectURL(draft.imagePreview);
     });
-    setArticleDrafts([createEmptyArticleDraft(`${Date.now()}-article-reset`)]);
+    setArticleDrafts([]);
     setStatus(`Ολοκληρώθηκε. Δημοσιεύτηκαν ${readyDrafts.length} άρθρα.`);
     await loadPosts();
     setBusy(false);
@@ -316,6 +353,7 @@ export default function useArticleAdmin({
     actions: {
       addArticleDraft,
       updateArticleDraftField,
+      importArticleDraftDocuments,
       importArticleDraftDocument,
       setArticleDraftFile,
       removeArticleDraft,

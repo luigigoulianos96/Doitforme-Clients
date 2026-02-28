@@ -118,6 +118,7 @@ function PostCard({
   const [articleText, setArticleText] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true);
+  const [articleEditorExpanded, setArticleEditorExpanded] = useState(false);
   const [decisionLocked, setDecisionLocked] = useState(post.approval_status !== 'pending');
   const [decisionNotice, setDecisionNotice] = useState('');
   const [carouselIndex, setCarouselIndex] = useState(0);
@@ -136,6 +137,7 @@ function PostCard({
   const audioRecorderRef = useRef(null);
   const audioStreamRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const articleTextareaRef = useRef(null);
 
   const isInstagramStory = previewMode === 'instagram' && instagramKind === 'story';
   const isInstagramCarousel = previewMode === 'instagram' && instagramKind === 'carousel';
@@ -155,6 +157,10 @@ function PostCard({
 
   useEffect(() => {
     setCarouselIndex(0);
+  }, [post.id]);
+
+  useEffect(() => {
+    setArticleEditorExpanded(false);
   }, [post.id]);
 
   useEffect(() => {
@@ -196,6 +202,22 @@ function PostCard({
     const nextText = `${post.client_notes || post.caption || ''}`.trim();
     setArticleText(nextText);
   }, [post.client_notes, post.caption]);
+
+  useEffect(() => {
+    if (previewMode !== 'article') return;
+    const textarea = articleTextareaRef.current;
+    if (!textarea) return;
+
+    const collapsedHeight = '18rem';
+
+    if (!articleEditorExpanded) {
+      textarea.style.height = collapsedHeight;
+      return;
+    }
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [articleEditorExpanded, articleText, previewMode]);
 
   useEffect(() => {
     if (!draftAudioFile) {
@@ -400,6 +422,7 @@ function PostCard({
 
   async function handleDecision(nextStatus) {
     const articleValue = articleText.trim();
+    const previousArticleText = `${post.client_notes || post.caption || ''}`.trim();
     const existingClientNotes = `${post.client_notes || ''}`.trim();
     const clientNotesValue = previewMode === 'article' ? articleValue : trimmedNotes || existingClientNotes;
     const successLabel = previewMode === 'article' ?
@@ -427,9 +450,12 @@ function PostCard({
     if (nextFeedbackFile && !queuedAttachmentName) {
       onAppendHistory(post.id, nextFeedbackFile.name, 'Συνημμένο');
     }
+    const articleDecisionHistoryValue = articleValue !== previousArticleText
+      ? { beforeText: previousArticleText, afterText: articleValue }
+      : 'Χωρίς αλλαγή κειμένου.';
     onAppendHistory(
       post.id,
-      previewMode === 'article' ? articleValue || 'Χωρίς αλλαγή κειμένου.' : trimmedNotes || 'Χωρίς σημείωση.',
+      previewMode === 'article' ? articleDecisionHistoryValue : trimmedNotes || 'Χωρίς σημείωση.',
       nextStatus === 'approved' ? 'Έγκριση' : 'Απόρριψη'
     );
     setNotes('');
@@ -898,12 +924,20 @@ function PostCard({
 
 
     )),
-    React.createElement(ArticleEditTextarea, { rows:
+    React.createElement(ArticleEditTextarea, { ref:
+
+
+      articleTextareaRef, $expanded:
+
+
+      articleEditorExpanded, rows:
 
 
       "16", value:
       articleText, onChange:
-      (event) => setArticleText(event.target.value), placeholder:
+      (event) => setArticleText(event.target.value), onClick:
+      () => setArticleEditorExpanded(true), onBlur:
+      () => setArticleEditorExpanded(false), placeholder:
       "Επεξεργάσου το άρθρο και αποθήκευσε..." }), React.createElement(SaveRow, null, renderInlineFeedbackTools(), React.createElement(SaveNoteButton, { type:
 
 

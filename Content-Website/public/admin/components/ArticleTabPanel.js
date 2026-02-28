@@ -3,41 +3,45 @@ import CollapsiblePanel from './CollapsiblePanel.js';
 
 const h = React.createElement;
 
-const workflowIntroStyle = {
-  display: 'grid',
-  gap: '0.7rem',
-  padding: '1rem',
-  borderRadius: '1rem',
-  border: '1px solid color-mix(in srgb, var(--greyDark) 18%, transparent)',
-  background:
-    'linear-gradient(180deg, color-mix(in srgb, var(--gloomDark) 34%, transparent), color-mix(in srgb, var(--gloom) 20%, transparent))'
-};
-
-const progressRowStyle = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: '0.5rem',
-  alignItems: 'center'
-};
-
-const progressChipStyle = (tone) => ({
-  display: 'inline-flex',
-  alignItems: 'center',
-  width: 'fit-content',
-  padding: '0.22rem 0.55rem',
-  borderRadius: '999px',
-  border: `1px solid color-mix(in srgb, ${tone} 24%, transparent)`,
-  background: `color-mix(in srgb, ${tone} 10%, var(--gloomDark))`,
-  color: `color-mix(in srgb, ${tone} 80%, var(--text))`,
-  fontSize: '1.05rem',
-  fontWeight: 700,
-  letterSpacing: '0.03em'
-});
-
 const helperTextStyle = {
   color: 'color-mix(in srgb, var(--muted) 80%, var(--text))',
   fontSize: '1.2rem',
   lineHeight: 1.45
+};
+
+const primaryUploadBlockStyle = (active) => ({
+  display: 'grid',
+  gap: '0.65rem',
+  padding: '1rem',
+  borderRadius: '0.95rem',
+  border: `1px solid ${active ? 'color-mix(in srgb, var(--ok) 38%, transparent)' : 'color-mix(in srgb, var(--ok) 20%, var(--greyDark))'}`,
+  background: active
+    ? 'color-mix(in srgb, var(--ok) 10%, var(--gloomDark))'
+    : 'linear-gradient(180deg, color-mix(in srgb, var(--ok) 5%, var(--gloomDark)), color-mix(in srgb, var(--gloomDark) 42%, transparent))',
+  boxShadow: active ? '0 0 0 1px color-mix(in srgb, var(--ok) 12%, transparent)' : 'none'
+});
+
+const uploadHeadingStyle = {
+  fontSize: '1.48rem',
+  lineHeight: 1.3
+};
+
+const uploadSubLabelStyle = {
+  fontSize: '1.2rem',
+  fontWeight: 400
+};
+
+const uploadButtonStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  width: '100%',
+  borderRadius: '999px',
+  border: '1px solid color-mix(in srgb, var(--greyDark) 36%, transparent)',
+  background: 'color-mix(in srgb, var(--gloom) 64%, transparent)',
+  color: 'var(--text)',
+  padding: '0.62rem 1rem',
+  fontSize: '1.35rem',
+  cursor: 'pointer'
 };
 
 const draftCardStyle = {
@@ -90,21 +94,13 @@ const advancedIntroStyle = {
   background: 'color-mix(in srgb, var(--gloomDark) 28%, transparent)'
 };
 
-function renderDocumentPicker({ FilePicker, FilePickerButton, FileInput, onPick }) {
-  return h(
-    FilePicker,
-    null,
-    h(FilePickerButton, null, 'Doc'),
-    h(FileInput, {
-      type: 'file',
-      accept: '.docx,.txt,.md,.rtf,.html,.htm,.doc',
-      onChange: (event) => {
-        onPick((event.target.files || [])[0]);
-        event.target.value = '';
-      }
-    })
-  );
-}
+const compactSectionTitleStyle = {
+  margin: 0,
+  fontFamily: 'inherit',
+  fontSize: '1.42rem',
+  fontWeight: 700,
+  lineHeight: 1.35
+};
 
 function renderImagePicker({ FilePicker, FilePickerButton, FileInput, onPick, hasImage }) {
   return h(
@@ -126,12 +122,12 @@ export default function ArticleTabPanel({
   article,
   ui
 }) {
+  const [dragActive, setDragActive] = React.useState(false);
   const { busy, state, actions } = article;
-  const { drafts, primaryDraft, queuedDrafts, readyDraftCount } = state;
+  const { drafts } = state;
   const {
-    addArticleDraft,
     updateArticleDraftField,
-    importArticleDraftDocument,
+    importArticleDraftDocuments,
     setArticleDraftFile,
     removeArticleDraft,
     publishArticles
@@ -150,6 +146,61 @@ export default function ArticleTabPanel({
     FileInput,
     ArticleDraftPreview
   } = ui;
+
+  function handleDocumentUpload(files) {
+    const selectedFiles = Array.from(files || []).filter(Boolean);
+    if (selectedFiles.length === 0) return;
+    importArticleDraftDocuments(files);
+  }
+
+  function renderPrimaryDocumentUpload() {
+    return h(
+      'div',
+      {
+        style: primaryUploadBlockStyle(dragActive),
+        onDragOver: (event) => {
+          event.preventDefault();
+          setDragActive(true);
+        },
+        onDragLeave: () => setDragActive(false),
+        onDrop: (event) => {
+          event.preventDefault();
+          setDragActive(false);
+          handleDocumentUpload(event.dataTransfer.files || []);
+        }
+      },
+      h(
+        'strong',
+        { style: uploadHeadingStyle },
+        'Ανέβασμα άρθρου'
+      ),
+      h(
+        'span',
+        { style: uploadSubLabelStyle },
+        'Αρχεία .doc'
+      ),
+      h(
+        'label',
+        { style: uploadButtonStyle },
+        'Επιλογή',
+        h('input', {
+          type: 'file',
+          multiple: true,
+          accept: '.docx,.txt,.md,.rtf,.html,.htm,.doc',
+          style: { display: 'none' },
+          onChange: (event) => {
+            handleDocumentUpload(event.target.files || []);
+            event.target.value = '';
+          }
+        })
+      ),
+      h(
+        'small',
+        { style: helperTextStyle },
+        'Σύρε ένα ή περισσότερα αρχεία εδώ ή επίλεξέ τα για να προστεθούν στα πρόχειρα άρθρα.'
+      )
+    );
+  }
 
   function renderDraftCard(draft, label) {
     const isReady = draft.title.trim().length > 0 && draft.body.trim().length > 0;
@@ -188,12 +239,6 @@ export default function ArticleTabPanel({
       h(
         'div',
         { style: pickerRowStyle },
-        renderDocumentPicker({
-          FilePicker,
-          FilePickerButton,
-          FileInput,
-          onPick: (file) => importArticleDraftDocument(draft.id, file)
-        }),
         renderImagePicker({
           FilePicker,
           FilePickerButton,
@@ -233,70 +278,50 @@ export default function ArticleTabPanel({
     Form,
     { onSubmit: (event) => event.preventDefault() },
     h(
-      Step,
-      null,
-      h(StepTitle, null, 'Primary workflow'),
-      h(State, null, `Έτοιμα: ${readyDraftCount}/${drafts.length}`),
-      h(
-        'div',
-        { style: workflowIntroStyle },
-        h(
-          'div',
-          { style: progressRowStyle },
-          h('span', { style: progressChipStyle('var(--success)') }, `Ready ${readyDraftCount}`),
-          h('span', { style: progressChipStyle('var(--accent)') }, `Drafts ${drafts.length}`)
-        ),
-        h(
-          'small',
-          { style: helperTextStyle },
-          'Πρόσθεσε κείμενο χειροκίνητα ή φόρτωσε ένα doc για αυτόματη συμπλήρωση τίτλου και κύριου κειμένου.'
-        ),
-        h(
-          Actions,
-          null,
-          h(ActionButton, { type: 'button', onClick: addArticleDraft }, 'Νέο')
-        )
-      ),
-      primaryDraft ? renderDraftCard(primaryDraft, 'Κύριο άρθρο') : null
-    ),
-    h(
       CollapsiblePanel,
-      { title: 'Drafts (Advanced)' },
+      { title: 'Αναρτήσεις Άρθρων', defaultOpen: true },
       h(
         Step,
         null,
-        h(StepTitle, null, 'Advanced drafts'),
+        h(StepTitle, { style: compactSectionTitleStyle }, 'Ανέβασμα άρθρων'),
+        renderPrimaryDocumentUpload()
+      )
+    ),
+    h(
+      CollapsiblePanel,
+      { title: 'Πρόχειρα άρθρα', defaultOpen: true },
+      h(
+        Step,
+        null,
+        h(StepTitle, { style: compactSectionTitleStyle }, 'Ανεβασμένα Πρόχειρα Άρθρα'),
         h(
           'div',
           { style: advancedIntroStyle },
           h(
             'small',
             { style: helperTextStyle },
-            queuedDrafts.length > 0
-              ? `Υπάρχουν ${queuedDrafts.length} επιπλέον draft${queuedDrafts.length === 1 ? '' : 's'} έτοιμα για επεξεργασία ή δημοσίευση.`
-              : 'Δεν υπάρχουν επιπλέον drafts αυτή τη στιγμή.'
+            drafts.length > 0
+              ? `Υπάρχουν ${drafts.length} πρόχειρα άρθρα έτοιμα για επεξεργασία ή δημοσίευση.`
+              : 'Δεν υπάρχουν πρόχειρα άρθρα αυτή τη στιγμή.'
           )
         ),
-        queuedDrafts.map((draft, index) => renderDraftCard(draft, `Άρθρο ${index + 2}`))
-      )
-    ),
-    h(
-      Step,
-      null,
-      h(StepTitle, null, 'Publish'),
-      h(
-        'div',
-        { style: actionShelfStyle },
-        h('small', { style: helperTextStyle }, 'Η δημοσίευση παραμένει ίδια και στέλνει όλα τα έτοιμα drafts.'),
-        h(
-          Actions,
-          null,
-          h(
-            ActionButton,
-            { type: 'button', $type: 'primary', disabled: busy, onClick: publishArticles },
-            'Δημοσίευση'
-          )
-        )
+        drafts.map((draft, index) => renderDraftCard(draft, `Άρθρο ${index + 1}`)),
+        drafts.length > 0
+          ? h(
+              'div',
+              { style: actionShelfStyle },
+              h('small', { style: helperTextStyle }, 'Η δημοσίευση παραμένει ίδια και στέλνει όλα τα έτοιμα drafts.'),
+              h(
+                Actions,
+                null,
+                h(
+                  ActionButton,
+                  { type: 'button', $type: 'primary', disabled: busy, onClick: publishArticles },
+                  'Δημοσίευση'
+                )
+              )
+            )
+          : null
       )
     )
   );

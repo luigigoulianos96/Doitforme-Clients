@@ -223,6 +223,10 @@ const BlogTitle = styled.h2`
   font-family: 'Syne', sans-serif;
   font-size: clamp(2rem, 3.2vw, 3rem);
   line-height: 1.08;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 `;
 
 const PostHeader = styled.header`
@@ -437,7 +441,7 @@ const ArticleEditWrap = styled.div`
 
 const ArticleEditTextarea = styled.textarea`
   width: 100%;
-  min-height: 18rem;
+  min-height: ${(p) => (p.$expanded ? '28.75rem' : '18rem')};
   border: 1px solid color-mix(in srgb, var(--greyDark) 30%, transparent);
   border-radius: 0.9rem;
   background: color-mix(in srgb, var(--white) 98%, transparent);
@@ -447,6 +451,13 @@ const ArticleEditTextarea = styled.textarea`
   line-height: 1.45;
   padding: 0.9rem;
   resize: vertical;
+  transition: min-height 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+
+  &:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--focus) 55%, var(--greyDark));
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--focus) 12%, transparent);
+  }
 `;
 
 const ReviewHead = styled.div`

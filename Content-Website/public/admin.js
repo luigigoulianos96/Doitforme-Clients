@@ -627,6 +627,14 @@ const RowThumb = styled.div`
 
 const RowHeadText = styled.div`
   min-width: 0;
+
+  strong {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.3;
+  }
 `;
 
 const RowSummaryButton = styled.button`
@@ -1464,21 +1472,6 @@ function AdminApp() {
     setBusy(false);
   }
 
-  async function copyClientArticleText(post) {
-    const clientText = `${post.client_notes || ''}`.trim();
-    if (!clientText) {
-      setStatus('Δεν υπάρχει κείμενο πελάτη για αντιγραφή.');
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(clientText);
-      setStatus(`Αντιγράφηκε το κείμενο πελάτη για "${stripPostTypePrefix(post.title)}".`);
-    } catch (_error) {
-      setStatus('Η αντιγραφή απέτυχε.');
-    }
-  }
-
   async function deleteAllPostsPermanently() {
     if (activeTab === 'logo') {
       await logo.deleteAllLogoKitsPermanently();
@@ -1883,7 +1876,7 @@ function AdminApp() {
                         <RowText><strong>Story:</strong> Η προεπισκόπηση story δεν εμφανίζει λεζάντα.</RowText>
                       )}
 
-                      <Actions>
+                      <Actions style={{ margin: '0.75rem 0' }}>
                         <ActionButton type="button" $type="primary" disabled={busy} onClick={() => savePostEdits(post)}>
                           Αποθήκευση
                         </ActionButton>
@@ -1904,7 +1897,7 @@ function AdminApp() {
                       <CollapsiblePanel title="Advanced">
                         <EditActions>
                           <MediaUploadLabel htmlFor={`replace-${post.id}`}>
-                            Αντικατάσταση
+                            {activeTab === 'article' ? 'Αντικατάσταση εικόνας' : 'Αντικατάσταση'}
                           </MediaUploadLabel>
                           <HiddenFileInput
                             id={`replace-${post.id}`}
@@ -1969,11 +1962,8 @@ function AdminApp() {
                             )}
                             {(post.client_notes || '').trim().length > 0 && (
                               <Actions>
-                                <ActionButton type="button" onClick={() => copyClientArticleText(post)}>
-                                  Αντιγραφή
-                                </ActionButton>
                                 <ActionButton type="button" $type="primary" disabled={busy} onClick={() => applyClientArticleEdits(post)}>
-                                  Εφαρμογή
+                                  Εφαρμογή κειμένου πελάτη
                                 </ActionButton>
                               </Actions>
                             )}
