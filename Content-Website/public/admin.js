@@ -4,6 +4,11 @@ import { createClient } from '@supabase/supabase-js';
 import styled, { createGlobalStyle } from 'styled-components';
 import { uploadFile as uploadStorageFile, deleteFile as deleteStorageFile, getPublicUrl as getStoragePublicUrl } from './services/storageService.js';
 import InstagramFeedAdmin from './admin/components/InstagramFeedAdmin.js';
+import ArticleTabPanel from './admin/components/ArticleTabPanel.js';
+import LogoKitTabPanel from './admin/components/LogoKitTabPanel.js';
+import useAdminInstagramComposer from './admin/hooks/useAdminInstagramComposer.js';
+import useArticleAdmin from './admin/hooks/useArticleAdmin.js';
+import useLogoKitAdmin from './admin/hooks/useLogoKitAdmin.js';
 import InstagramPostCardUX from './admin/components/InstagramPostCardUX.js';
 import ActionMenu from './admin/components/ActionMenu.js';
 import CollapsiblePanel from './admin/components/CollapsiblePanel.js';
@@ -1084,20 +1089,10 @@ function AdminApp() {
   const [session, setSession] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [mediaItems, setMediaItems] = useState([]);
-  const [carouselPosts, setCarouselPosts] = useState([]);
-  const [feedOrderItems, setFeedOrderItems] = useState([]);
-  const [instagramGridItems, setInstagramGridItems] = useState([]);
-  const [instagramStoryItems, setInstagramStoryItems] = useState([]);
   const [dragActive, setDragActive] = useState(false);
-  const [draggedId, setDraggedId] = useState(null);
-  const [draggedCarouselSlideId, setDraggedCarouselSlideId] = useState('');
-  const [orderLocked, setOrderLocked] = useState(false);
-  const [captionsText, setCaptionsText] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [posts, setPosts] = useState([]);
-  const [logoKits, setLogoKits] = useState([]);
   const [copyState, setCopyState] = useState('');
   const [selectedClient, setSelectedClient] = useState(null);
   const [clientSlug] = useState(getClientSlugFromUrl());
@@ -1106,30 +1101,6 @@ function AdminApp() {
   const [replacementPreviews, setReplacementPreviews] = useState({});
   const [activeTab, setActiveTab] = useState('instagram');
   const [expandedPostId, setExpandedPostId] = useState('');
-  const [articleDrafts, setArticleDrafts] = useState([
-    { id: `${Date.now()}-article-1`, title: '', body: '', imageFile: null, imagePreview: '' }
-  ]);
-  const [logoBrandName, setLogoBrandName] = useState('');
-  const [logoAgencyName, setLogoAgencyName] = useState('Doitforme');
-  const [logoTagline, setLogoTagline] = useState('');
-  const [logoShortDescription, setLogoShortDescription] = useState('');
-  const [logoConceptLabel, setLogoConceptLabel] = useState('Concept 1');
-  const [logoInspirationItems, setLogoInspirationItems] = useState([]);
-  const [logoInspirationResultItems, setLogoInspirationResultItems] = useState([]);
-  const [logoMainLogoItems, setLogoMainLogoItems] = useState([]);
-  const [logoSecondaryLogoItems, setLogoSecondaryLogoItems] = useState([]);
-  const [logoLogomarkItems, setLogoLogomarkItems] = useState([]);
-  const [logoVariationItems, setLogoVariationItems] = useState([]);
-  const [logoMascotPrimaryItems, setLogoMascotPrimaryItems] = useState([]);
-  const [logoMascotPoseItems, setLogoMascotPoseItems] = useState([]);
-  const [logoPatternItems, setLogoPatternItems] = useState([]);
-  const [logoMockupItems, setLogoMockupItems] = useState([]);
-  const [logoStickerItems, setLogoStickerItems] = useState([]);
-  const [logoPrimaryFontItems, setLogoPrimaryFontItems] = useState([]);
-  const [logoSecondaryFontItems, setLogoSecondaryFontItems] = useState([]);
-  const [logoExtraFontItems, setLogoExtraFontItems] = useState([]);
-  const [logoPrimaryColorInputs, setLogoPrimaryColorInputs] = useState(['']);
-  const [logoSecondaryColorInputs, setLogoSecondaryColorInputs] = useState(['']);
 
   useEffect(() => {
     const supabaseClient = createSupabaseClient();
@@ -1157,12 +1128,6 @@ function AdminApp() {
   }, [client, session, clientSlug]);
 
   useEffect(() => {
-    if (!client || !session || !selectedClient) return;
-    loadPosts();
-    loadLogoKits();
-  }, [client, session, selectedClient]);
-
-  useEffect(() => {
     setExpandedPostId('');
   }, [activeTab, selectedClient?.id]);
 
@@ -1174,53 +1139,64 @@ function AdminApp() {
     };
   }, [replacementPreviews]);
 
+  const instagram = useAdminInstagramComposer({
+    client,
+    session,
+    selectedClient,
+    posts,
+    setBusy,
+    setStatus,
+    loadPosts,
+    validateSelectedClientScope,
+    createStorageAdapter,
+    createMediaItems,
+    slugFilename,
+    makeTypedTitle,
+    parseCaptions,
+    parsePostType,
+    instagramEntryMeta,
+    stripPostTypePrefix,
+    isVideoPost,
+    isExistingFeedOrderEntry,
+    isInstagramGridFile
+  });
+
+  const article = useArticleAdmin({
+    client,
+    session,
+    selectedClient,
+    posts,
+    setBusy,
+    setStatus,
+    loadPosts,
+    validateSelectedClientScope,
+    createStorageAdapter,
+    slugFilename,
+    makeTypedTitle
+  });
+
+  const logo = useLogoKitAdmin({
+    client,
+    session,
+    selectedClient,
+    setBusy,
+    setStatus,
+    loadPosts,
+    validateSelectedClientScope,
+    createStorageAdapter,
+    slugFilename,
+    fileExtension,
+    isLogoVisualFile,
+    isLogoFontFile,
+    normalizeHexColor,
+    createMediaItems
+  });
+
   useEffect(() => {
-    return () => {
-      articleDrafts.forEach((draft) => {
-        if (draft.imagePreview) URL.revokeObjectURL(draft.imagePreview);
-      });
-      [
-        carouselPosts.flatMap((carouselPost) => carouselPost.items),
-        instagramGridItems,
-        instagramStoryItems,
-        logoInspirationItems,
-        logoInspirationResultItems,
-        logoMainLogoItems,
-        logoSecondaryLogoItems,
-        logoLogomarkItems,
-        logoVariationItems,
-        logoMascotPrimaryItems,
-        logoMascotPoseItems,
-        logoPatternItems,
-        logoMockupItems,
-        logoStickerItems,
-        logoPrimaryFontItems,
-        logoSecondaryFontItems,
-        logoExtraFontItems
-      ].forEach((collection) => {
-        collection.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-      });
-    };
-  }, [
-    articleDrafts,
-    carouselPosts,
-    instagramGridItems,
-    instagramStoryItems,
-    logoInspirationItems,
-    logoInspirationResultItems,
-    logoMainLogoItems,
-    logoSecondaryLogoItems,
-    logoLogomarkItems,
-    logoVariationItems,
-    logoMascotPrimaryItems,
-    logoMascotPoseItems,
-    logoPatternItems,
-    logoMockupItems,
-    logoStickerItems,
-    logoPrimaryFontItems,
-    logoSecondaryFontItems,
-    logoExtraFontItems
-  ]);
+    if (!client || !session || !selectedClient) return;
+    loadPosts();
+    logo.loadLogoKits();
+  }, [client, session, selectedClient]);
 
   async function loadSelectedClient() {
     const { data, error } = await client
@@ -1251,7 +1227,7 @@ function AdminApp() {
     if (error || !data) {
       setSelectedClient(null);
       setPosts([]);
-      setLogoKits([]);
+      logo.clearLogoKits();
       setStatus('Ο επιλεγμένος client δεν υπάρχει πλέον. Πήγαινε Portal και άνοιξε ξανά τον admin.');
       return { ok: false, value: null };
     }
@@ -1287,707 +1263,6 @@ function AdminApp() {
     setPosts(data || []);
   }
 
-  async function loadLogoKits() {
-    if (!selectedClient) return;
-    const { data, error } = await client
-      .from('logo_kits')
-      .select('id,title,status,approval_status,client_notes,version,created_at,client_id')
-      .eq('client_id', selectedClient.id)
-      .order('version', { ascending: false })
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      setStatus(`Σφάλμα φόρτωσης logo kits: ${error.message}`);
-      return;
-    }
-
-    setLogoKits(data || []);
-  }
-
-  async function updatePostSortOrder(postId, sortOrder) {
-    const { error } = await client
-      .from('posts')
-      .update({ sort_order: sortOrder })
-      .eq('id', postId);
-
-    return error;
-  }
-
-  function appendFiles(files) {
-    if (orderLocked) {
-      setStatus('Ξεκλείδωσε πρώτα τη σειρά αν θέλεις να προσθέσεις ή να αλλάξεις αρχεία.');
-      return;
-    }
-
-    const validFiles = Array.from(files || []).filter((file) =>
-      file.type.startsWith('image/') || file.type.startsWith('video/')
-    );
-
-    if (validFiles.length === 0) {
-      setStatus('Ρίξε μόνο αρχεία εικόνας/βίντεο.');
-      return;
-    }
-
-    const nextItems = createMediaItems(validFiles);
-    setMediaItems((prev) => [...prev, ...nextItems]);
-    setFeedOrderItems((prev) => [
-      ...prev,
-      ...nextItems.map((item) => ({
-        id: `single:${item.id}`,
-        kind: 'single',
-        refId: item.id
-      }))
-    ]);
-    setStatus(`Προστέθηκαν ${validFiles.length} αρχεία.`);
-  }
-
-  function appendInstagramGridFiles(files) {
-    const validFiles = Array.from(files || []).filter((file) => isInstagramGridFile(file));
-    if (validFiles.length === 0) {
-      setStatus('Η ενιαία 9άδα δέχεται μόνο 1 αρχείο .png.');
-      return;
-    }
-    const nextItems = createMediaItems([validFiles[0]]).map((item) => ({ ...item, kind: 'image' }));
-    setInstagramGridItems((prev) => {
-      prev.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-      return nextItems;
-    });
-    setStatus('Φορτώθηκε το PNG για την ενιαία 9άδα.');
-  }
-
-  function appendCarouselFiles(files) {
-    if (orderLocked) {
-      setStatus('Ξεκλείδωσε πρώτα τη σειρά αν θέλεις να προσθέσεις ή να αλλάξεις carousel.');
-      return;
-    }
-
-    const validFiles = Array.from(files || []).filter((file) =>
-      file.type.startsWith('image/') || file.type.startsWith('video/')
-    );
-    if (validFiles.length === 0) {
-      setStatus('Το carousel δέχεται εικόνες ή βίντεο.');
-      return;
-    }
-    const nextItems = createMediaItems(validFiles);
-    const nextCarouselId = `${Date.now()}-carousel-${Math.random().toString(36).slice(2, 8)}`;
-    setCarouselPosts((prev) => [
-      ...prev,
-      {
-        id: nextCarouselId,
-        items: nextItems
-      }
-    ]);
-    setFeedOrderItems((prev) => [
-      ...prev,
-      {
-        id: `carousel:${nextCarouselId}`,
-        kind: 'carousel',
-        refId: nextCarouselId
-      }
-    ]);
-    setStatus(`Δημιουργήθηκε carousel post με ${nextItems.length} slides.`);
-  }
-
-  function removeCarouselMedia(carouselId, itemId) {
-    setCarouselPosts((prev) => {
-      const targetCarousel = prev.find((carouselPost) => carouselPost.id === carouselId);
-      const targetItem = targetCarousel?.items.find((item) => item.id === itemId);
-      if (targetItem?.previewUrl) URL.revokeObjectURL(targetItem.previewUrl);
-
-      const next = prev
-        .map((carouselPost) =>
-          carouselPost.id === carouselId
-            ? { ...carouselPost, items: carouselPost.items.filter((item) => item.id !== itemId) }
-            : carouselPost
-        )
-        .filter((carouselPost) => carouselPost.items.length > 0);
-
-      const stillExists = next.some((carouselPost) => carouselPost.id === carouselId);
-      if (!stillExists) {
-        setFeedOrderItems((orderPrev) => orderPrev.filter((entry) => !(entry.kind === 'carousel' && entry.refId === carouselId)));
-      }
-
-      return next;
-    });
-  }
-
-  function removeCarouselPost(carouselId) {
-    setCarouselPosts((prev) => {
-      const targetCarousel = prev.find((carouselPost) => carouselPost.id === carouselId);
-      if (targetCarousel) {
-        targetCarousel.items.forEach((item) => {
-          if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-        });
-      }
-      return prev.filter((carouselPost) => carouselPost.id !== carouselId);
-    });
-    setFeedOrderItems((prev) => prev.filter((entry) => !(entry.kind === 'carousel' && entry.refId === carouselId)));
-  }
-
-  function appendInstagramStories(files) {
-    const validFiles = Array.from(files || []).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
-    if (validFiles.length === 0) {
-      setStatus('Τα stories δέχονται μόνο εικόνες ή βίντεο.');
-      return;
-    }
-    const nextItems = createMediaItems(validFiles);
-    setInstagramStoryItems((prev) => [...prev, ...nextItems]);
-    setStatus(`Προστέθηκαν ${nextItems.length} stories draft.`);
-  }
-
-  function removeInstagramStoryItem(itemId) {
-    setInstagramStoryItems((prev) => {
-      const selected = prev.find((item) => item.id === itemId);
-      if (selected?.previewUrl) URL.revokeObjectURL(selected.previewUrl);
-      return prev.filter((item) => item.id !== itemId);
-    });
-  }
-
-  function reorderItems(items, fromIndex, toIndex) {
-    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return items;
-    const copy = [...items];
-    const [picked] = copy.splice(fromIndex, 1);
-    copy.splice(toIndex, 0, picked);
-    return copy;
-  }
-
-  function handleTileDrop(targetId) {
-    if (orderLocked || !draggedId) return;
-    setFeedOrderItems((prev) => {
-      const fromIndex = prev.findIndex((item) => item.id === draggedId);
-      const toIndex = prev.findIndex((item) => item.id === targetId);
-      return reorderItems(prev, fromIndex, toIndex);
-    });
-    setDraggedId(null);
-  }
-
-  function removeMedia(id) {
-    if (orderLocked) return;
-    setMediaItems((prev) => {
-      const found = prev.find((item) => item.id === id);
-      if (found) URL.revokeObjectURL(found.previewUrl);
-      return prev.filter((item) => item.id !== id);
-    });
-    setFeedOrderItems((prev) => prev.filter((entry) => !(entry.kind === 'single' && entry.refId === id)));
-  }
-
-  function clearMedia() {
-    if (orderLocked) return;
-    mediaItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    setMediaItems([]);
-    setFeedOrderItems((prev) => prev.filter((entry) => entry.kind !== 'single'));
-    setStatus('Η λίστα αρχείων καθαρίστηκε.');
-  }
-
-  function clearCarouselUploads() {
-    if (orderLocked) return;
-    carouselPosts.forEach((carouselPost) => {
-      carouselPost.items.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    });
-    setCarouselPosts([]);
-    setFeedOrderItems((prev) => prev.filter((entry) => entry.kind !== 'carousel'));
-    setStatus('Τα carousel uploads καθαρίστηκαν.');
-  }
-
-  function handleCarouselSlideDrop(carouselId, targetItemId) {
-    if (orderLocked || !draggedCarouselSlideId) return;
-    const [sourceCarouselId, sourceItemId] = draggedCarouselSlideId.split('::');
-    if (sourceCarouselId !== carouselId || !sourceItemId) return;
-
-    setCarouselPosts((prev) =>
-      prev.map((carouselPost) => {
-        if (carouselPost.id !== carouselId) return carouselPost;
-        const fromIndex = carouselPost.items.findIndex((item) => item.id === sourceItemId);
-        const toIndex = carouselPost.items.findIndex((item) => item.id === targetItemId);
-        return {
-          ...carouselPost,
-          items: reorderItems(carouselPost.items, fromIndex, toIndex)
-        };
-      })
-    );
-    setDraggedCarouselSlideId('');
-  }
-
-  function addArticleDraft() {
-    setArticleDrafts((prev) => [
-      ...prev,
-      { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, title: '', body: '', imageFile: null, imagePreview: '' }
-    ]);
-  }
-
-  function updateArticleDraftField(draftId, field, value) {
-    setArticleDrafts((prev) =>
-      prev.map((draft) => (draft.id === draftId ? { ...draft, [field]: value } : draft))
-    );
-  }
-
-  function setArticleDraftFile(draftId, file) {
-    if (!file) return;
-    const previewUrl = URL.createObjectURL(file);
-    setArticleDrafts((prev) =>
-      prev.map((draft) => {
-        if (draft.id !== draftId) return draft;
-        if (draft.imagePreview) URL.revokeObjectURL(draft.imagePreview);
-        return { ...draft, imageFile: file, imagePreview: previewUrl };
-      })
-    );
-  }
-
-  function removeArticleDraft(draftId) {
-    setArticleDrafts((prev) => {
-      const selected = prev.find((draft) => draft.id === draftId);
-      if (selected?.imagePreview) URL.revokeObjectURL(selected.imagePreview);
-      const next = prev.filter((draft) => draft.id !== draftId);
-      if (next.length > 0) return next;
-      return [{ id: `${Date.now()}-article-base`, title: '', body: '', imageFile: null, imagePreview: '' }];
-    });
-  }
-
-  async function publishArticles() {
-    if (!client || !session || !selectedClient) return;
-    const clientScope = await validateSelectedClientScope();
-    if (!clientScope.ok) return;
-
-    const readyDrafts = articleDrafts
-      .map((draft) => ({ ...draft, title: draft.title.trim(), body: draft.body.trim() }))
-      .filter((draft) => draft.title.length > 0 && draft.body.length > 0);
-
-    if (readyDrafts.length === 0) {
-      setStatus('Συμπλήρωσε τίτλο και κείμενο σε τουλάχιστον 1 άρθρο πριν τη δημοσίευση.');
-      return;
-    }
-
-    setBusy(true);
-    setStatus('Γίνεται ανέβασμα άρθρων...');
-    const storage = createStorageAdapter();
-    const highestSortOrder = posts.reduce((max, post) => Math.max(max, post.sort_order || 0), 0);
-
-    for (let i = 0; i < readyDrafts.length; i += 1) {
-      const draft = readyDrafts[i];
-      let imagePath = '';
-      let imageUrl = '';
-
-      if (draft.imageFile) {
-        const fileName = `${Date.now()}-article-${i}-${slugFilename(draft.imageFile.name)}`;
-        const path = `${session.user.id}/${fileName}`;
-        const { error: uploadError } = await storage.upload(path, draft.imageFile, { cacheControl: '3600', upsert: false });
-
-        if (uploadError) {
-          setStatus(`Σφάλμα upload άρθρου (${draft.title}): ${uploadError.message}`);
-          setBusy(false);
-          return;
-        }
-
-        const { data: publicData } = storage.getPublicUrl(path);
-        imagePath = path;
-        imageUrl = publicData.publicUrl;
-      }
-
-      const payload = {
-        title: makeTypedTitle('article', draft.title),
-        caption: draft.body,
-        image_url: imageUrl,
-        image_path: imagePath,
-        client_id: clientScope.value.id,
-        status: 'published',
-        approval_status: 'pending',
-        client_notes: '',
-        username: 'content.writer',
-        like_count: 0,
-        sort_order: highestSortOrder + i + 1
-      };
-
-      const { error: insertError } = await client.from('posts').insert(payload);
-      if (insertError) {
-        setStatus(`Σφάλμα βάσης άρθρου (${draft.title}): ${insertError.message}`);
-        setBusy(false);
-        return;
-      }
-    }
-
-    articleDrafts.forEach((draft) => {
-      if (draft.imagePreview) URL.revokeObjectURL(draft.imagePreview);
-    });
-    setArticleDrafts([{ id: `${Date.now()}-article-reset`, title: '', body: '', imageFile: null, imagePreview: '' }]);
-    setStatus(`Ολοκληρώθηκε. Δημοσιεύτηκαν ${readyDrafts.length} άρθρα.`);
-    await loadPosts();
-    setBusy(false);
-  }
-
-  function isPngOrSvgFile(file) {
-    const ext = fileExtension(file?.name);
-    return ext === '.png' || ext === '.svg' || ext === '.jpg' || ext === '.jpeg';
-  }
-
-  function buildUploadItems(files) {
-    return createMediaItems(files).map((item) => ({ ...item, kind: 'image' }));
-  }
-
-  function appendSingleImage(setter, files, errorMessage) {
-    const validFiles = Array.from(files || []).filter((file) => isPngOrSvgFile(file));
-    if (validFiles.length === 0) {
-      setStatus(errorMessage);
-      return;
-    }
-    const first = validFiles[0];
-    const nextItems = buildUploadItems([first]);
-    setter((prev) => {
-      prev.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-      return nextItems;
-    });
-  }
-
-  function appendMultiImages(setter, files, validator, errorMessage) {
-    const validFiles = Array.from(files || []).filter((file) => validator(file));
-    if (validFiles.length === 0) {
-      setStatus(errorMessage);
-      return;
-    }
-    const nextItems = buildUploadItems(validFiles);
-    setter((prev) => [...prev, ...nextItems]);
-  }
-
-  function removeUploadItem(setter, itemId) {
-    setter((prev) => {
-      const selected = prev.find((item) => item.id === itemId);
-      if (selected?.previewUrl) URL.revokeObjectURL(selected.previewUrl);
-      return prev.filter((item) => item.id !== itemId);
-    });
-  }
-
-  function appendSingleFont(setter, files) {
-    const validFiles = Array.from(files || []).filter((file) => isLogoFontFile(file));
-    if (validFiles.length === 0) {
-      setStatus('Για fonts επίλεξε μόνο .otf ή .ttf.');
-      return;
-    }
-    const nextItems = createMediaItems([validFiles[0]]).map((item) => ({ ...item, kind: 'font' }));
-    setter((prev) => {
-      prev.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-      return nextItems;
-    });
-  }
-
-  function appendExtraFonts(files) {
-    const validFiles = Array.from(files || []).filter((file) => isLogoFontFile(file));
-    if (validFiles.length === 0) {
-      setStatus('Για extra fonts επίλεξε μόνο .otf ή .ttf.');
-      return;
-    }
-    const nextItems = createMediaItems(validFiles).map((item) => ({ ...item, kind: 'font' }));
-    setLogoExtraFontItems((prev) => [...prev, ...nextItems]);
-  }
-
-  function updatePrimaryColorInput(index, value) {
-    setLogoPrimaryColorInputs((prev) => {
-      const next = [...prev];
-      next[index] = value;
-      return next;
-    });
-  }
-
-  function updateSecondaryColorInput(index, value) {
-    setLogoSecondaryColorInputs((prev) => {
-      const next = [...prev];
-      next[index] = value;
-      return next;
-    });
-  }
-
-  function addPrimaryColorInput() {
-    setLogoPrimaryColorInputs((prev) => [...prev, '']);
-  }
-
-  function addSecondaryColorInput() {
-    setLogoSecondaryColorInputs((prev) => [...prev, '']);
-  }
-
-  function removePrimaryColorInput(index) {
-    setLogoPrimaryColorInputs((prev) => {
-      const next = prev.filter((_, idx) => idx !== index);
-      if (next.length > 0) return next;
-      return [''];
-    });
-  }
-
-  function removeSecondaryColorInput(index) {
-    setLogoSecondaryColorInputs((prev) => {
-      const next = prev.filter((_, idx) => idx !== index);
-      if (next.length > 0) return next;
-      return [''];
-    });
-  }
-
-  function clearLogoDraft() {
-    [
-      logoInspirationItems,
-      logoInspirationResultItems,
-      logoMainLogoItems,
-      logoSecondaryLogoItems,
-      logoLogomarkItems,
-      logoVariationItems,
-      logoMascotPrimaryItems,
-      logoMascotPoseItems,
-      logoPatternItems,
-      logoMockupItems,
-      logoStickerItems,
-      logoPrimaryFontItems,
-      logoSecondaryFontItems,
-      logoExtraFontItems
-    ].forEach((collection) => {
-      collection.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    });
-    setLogoBrandName('');
-    setLogoAgencyName('Doitforme');
-    setLogoTagline('');
-    setLogoShortDescription('');
-    setLogoConceptLabel('Concept 1');
-    setLogoInspirationItems([]);
-    setLogoInspirationResultItems([]);
-    setLogoMainLogoItems([]);
-    setLogoSecondaryLogoItems([]);
-    setLogoLogomarkItems([]);
-    setLogoVariationItems([]);
-    setLogoMascotPrimaryItems([]);
-    setLogoMascotPoseItems([]);
-    setLogoPatternItems([]);
-    setLogoMockupItems([]);
-    setLogoStickerItems([]);
-    setLogoPrimaryFontItems([]);
-    setLogoSecondaryFontItems([]);
-    setLogoExtraFontItems([]);
-    setLogoPrimaryColorInputs(['']);
-    setLogoSecondaryColorInputs(['']);
-    setStatus('Καθαρίστηκε το logo kit draft.');
-  }
-
-  async function publishLogoKit() {
-    if (!client || !session || !selectedClient) return;
-    const clientScope = await validateSelectedClientScope();
-    if (!clientScope.ok) return;
-    const hasMainLogo = logoMainLogoItems.length > 0;
-    if (!hasMainLogo) {
-      setStatus('Ανέβασε τουλάχιστον Main Logo πριν το Generate Presentation.');
-      return;
-    }
-
-    setBusy(true);
-    setStatus('Γίνεται ανέβασμα logo kit...');
-    const storage = createStorageAdapter();
-    const nextVersion = (logoKits[0]?.version || 0) + 1;
-    const { data: insertedKit, error: insertKitError } = await client
-      .from('logo_kits')
-      .insert({
-        client_id: clientScope.value.id,
-        title: `${(logoBrandName || '').trim() || 'Logo Kit'} v${nextVersion}`,
-        status: 'published',
-        approval_status: 'pending',
-        client_notes: '',
-        version: nextVersion
-      })
-      .select('id')
-      .single();
-
-    if (insertKitError || !insertedKit?.id) {
-      setStatus(`Σφάλμα δημιουργίας logo kit: ${insertKitError?.message || 'Άγνωστο σφάλμα'}`);
-      setBusy(false);
-      return;
-    }
-
-    let sortOffset = 0;
-
-    const uploadVisualGroup = async (items, prefix, label) => {
-      for (let i = 0; i < items.length; i += 1) {
-        const item = items[i];
-        const fileName = `${Date.now()}-${prefix.toLowerCase()}-${i}-${slugFilename(item.file.name)}`;
-        const path = `${session.user.id}/${fileName}`;
-        const { error: uploadError } = await storage.upload(path, item.file, { cacheControl: '3600', upsert: false });
-        if (uploadError) {
-          setStatus(`Σφάλμα upload ${label} (${item.file.name}): ${uploadError.message}`);
-          return { ok: false };
-        }
-        const { data: publicData } = storage.getPublicUrl(path);
-        const { error: insertError } = await client.from('logo_assets').insert({
-          logo_kit_id: insertedKit.id,
-          asset_type: 'visual',
-          file_name: `${prefix}::${item.file.name}`,
-          file_ext: fileExtension(item.file.name),
-          file_url: publicData.publicUrl,
-          file_path: path,
-          sort_order: sortOffset
-        });
-        sortOffset += 1;
-        if (insertError) {
-          setStatus(`Σφάλμα βάσης ${label} (${item.file.name}): ${insertError.message}`);
-          return { ok: false };
-        }
-      }
-      return { ok: true };
-    };
-
-    const uploadFontGroup = async (items, prefix) => {
-      for (let i = 0; i < items.length; i += 1) {
-        const item = items[i];
-        const fileName = `${Date.now()}-${prefix.toLowerCase()}-${i}-${slugFilename(item.file.name)}`;
-        const path = `${session.user.id}/${fileName}`;
-        const { error: uploadError } = await storage.upload(path, item.file, { cacheControl: '3600', upsert: false });
-        if (uploadError) {
-          setStatus(`Σφάλμα upload font (${item.file.name}): ${uploadError.message}`);
-          return { ok: false };
-        }
-        const { data: publicData } = storage.getPublicUrl(path);
-        const { error: insertError } = await client.from('logo_assets').insert({
-          logo_kit_id: insertedKit.id,
-          asset_type: 'font',
-          file_name: `${prefix}::${item.file.name}`,
-          file_ext: fileExtension(item.file.name),
-          file_url: publicData.publicUrl,
-          file_path: path,
-          sort_order: sortOffset
-        });
-        sortOffset += 1;
-        if (insertError) {
-          setStatus(`Σφάλμα βάσης font (${item.file.name}): ${insertError.message}`);
-          return { ok: false };
-        }
-      }
-      return { ok: true };
-    };
-
-    const uploadGroups = [
-      { items: logoInspirationItems, prefix: 'INSPIRATION', label: 'inspiration image' },
-      { items: logoInspirationResultItems, prefix: 'INSPIRATION_RESULT', label: 'inspiration result image' },
-      { items: logoMainLogoItems, prefix: 'MAIN_LOGO', label: 'main logo' },
-      { items: logoSecondaryLogoItems, prefix: 'SECONDARY_LOGO', label: 'secondary logo' },
-      { items: logoLogomarkItems, prefix: 'LOGOMARK', label: 'logomark' },
-      { items: logoVariationItems, prefix: 'LOGO_VARIATION', label: 'logo variation' },
-      { items: logoMascotPrimaryItems, prefix: 'MASCOT_PRIMARY', label: 'mascot primary' },
-      { items: logoMascotPoseItems, prefix: 'MASCOT_POSE', label: 'mascot pose' },
-      { items: logoPatternItems, prefix: 'PATTERN', label: 'pattern' },
-      { items: logoMockupItems, prefix: 'MOCKUP', label: 'mockup' },
-      { items: logoStickerItems, prefix: 'STICKER', label: 'sticker' }
-    ];
-
-    for (let i = 0; i < uploadGroups.length; i += 1) {
-      const result = await uploadVisualGroup(uploadGroups[i].items, uploadGroups[i].prefix, uploadGroups[i].label);
-      if (!result.ok) {
-        setBusy(false);
-        return;
-      }
-    }
-
-    const primaryFontResult = await uploadFontGroup(logoPrimaryFontItems, 'FONT_PRIMARY');
-    if (!primaryFontResult.ok) {
-      setBusy(false);
-      return;
-    }
-    const secondaryFontResult = await uploadFontGroup(logoSecondaryFontItems, 'FONT_SECONDARY');
-    if (!secondaryFontResult.ok) {
-      setBusy(false);
-      return;
-    }
-    const extraFontResult = await uploadFontGroup(logoExtraFontItems, 'FONT_EXTRA');
-    if (!extraFontResult.ok) {
-      setBusy(false);
-      return;
-    }
-
-    const primaryColors = logoPrimaryColorInputs.map((value) => normalizeHexColor(value)).filter(Boolean);
-    const secondaryColors = logoSecondaryColorInputs.map((value) => normalizeHexColor(value)).filter(Boolean);
-
-    for (let i = 0; i < primaryColors.length; i += 1) {
-      const color = primaryColors[i];
-      const { error: insertError } = await client.from('logo_colors').insert({
-        logo_kit_id: insertedKit.id,
-        hex_color: color,
-        sort_order: i
-      });
-      if (insertError) {
-        setStatus(`Σφάλμα βάσης color (${color}): ${insertError.message}`);
-        setBusy(false);
-        return;
-      }
-    }
-
-    for (let i = 0; i < secondaryColors.length; i += 1) {
-      const color = secondaryColors[i];
-      const { error: insertError } = await client.from('logo_colors').insert({
-        logo_kit_id: insertedKit.id,
-        hex_color: color,
-        sort_order: 1000 + i
-      });
-      if (insertError) {
-        setStatus(`Σφάλμα βάσης secondary color (${color}): ${insertError.message}`);
-        setBusy(false);
-        return;
-      }
-    }
-
-    const metaPayload = {
-      type: 'logo_presentation_meta_v1',
-      brandName: (logoBrandName || '').trim(),
-      agencyName: (logoAgencyName || '').trim(),
-      tagline: (logoTagline || '').trim(),
-      shortDescription: (logoShortDescription || '').trim(),
-      conceptLabel: (logoConceptLabel || '').trim() || 'Concept 1'
-    };
-    const { error: metaError } = await client.from('logo_story_steps').insert({
-      logo_kit_id: insertedKit.id,
-      step_order: 1,
-      step_text: JSON.stringify(metaPayload)
-    });
-    if (metaError) {
-      setStatus(`Σφάλμα βάσης metadata: ${metaError.message}`);
-      setBusy(false);
-      return;
-    }
-
-    [
-      logoInspirationItems,
-      logoInspirationResultItems,
-      logoMainLogoItems,
-      logoSecondaryLogoItems,
-      logoLogomarkItems,
-      logoVariationItems,
-      logoMascotPrimaryItems,
-      logoMascotPoseItems,
-      logoPatternItems,
-      logoMockupItems,
-      logoStickerItems,
-      logoPrimaryFontItems,
-      logoSecondaryFontItems,
-      logoExtraFontItems
-    ].forEach((collection) => {
-      collection.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    });
-    setLogoBrandName('');
-    setLogoAgencyName('Doitforme');
-    setLogoTagline('');
-    setLogoShortDescription('');
-    setLogoConceptLabel('Concept 1');
-    setLogoInspirationItems([]);
-    setLogoInspirationResultItems([]);
-    setLogoMainLogoItems([]);
-    setLogoSecondaryLogoItems([]);
-    setLogoLogomarkItems([]);
-    setLogoVariationItems([]);
-    setLogoMascotPrimaryItems([]);
-    setLogoMascotPoseItems([]);
-    setLogoPatternItems([]);
-    setLogoMockupItems([]);
-    setLogoStickerItems([]);
-    setLogoPrimaryFontItems([]);
-    setLogoSecondaryFontItems([]);
-    setLogoExtraFontItems([]);
-    setLogoPrimaryColorInputs(['']);
-    setLogoSecondaryColorInputs(['']);
-    setStatus('Ολοκληρώθηκε. Το logo kit δημοσιεύτηκε με fixed presentation template.');
-    await loadPosts();
-    await loadLogoKits();
-    setBusy(false);
-    return;
-  }
-
   async function handleSignIn(event) {
     event.preventDefault();
     if (!client) return;
@@ -2012,354 +1287,9 @@ function AdminApp() {
     setSession(null);
     setSelectedClient(null);
     setPosts([]);
-    setLogoKits([]);
+    logo.clearLogoKits();
     setStatus(error ? `Σφάλμα αποσύνδεσης: ${error.message}` : 'Έγινε αποσύνδεση.');
     window.location.href = './portal.html';
-  }
-
-  async function handleFeedUpload() {
-    if (!client || !session || !selectedClient) return;
-    const clientScope = await validateSelectedClientScope();
-    if (!clientScope.ok) return;
-
-    const totalUploads = mediaItems.length + carouselSlideCount;
-    const canRefreshExistingFeedOrder = existingFeedOrderItems.length > 0;
-    if (totalUploads === 0 && !canRefreshExistingFeedOrder) {
-      setStatus('Ανέβασε τουλάχιστον ένα feed post ή carousel.');
-      return;
-    }
-
-    if (requiresLockedFeedOrder && !orderLocked) {
-      setStatus('Κλείδωσε τη σειρά feed πριν το ανέβασμα.');
-      return;
-    }
-
-    const captions = parseCaptions(captionsText);
-    setBusy(true);
-    setStatus('Γίνεται ανέβασμα feed αναρτήσεων...');
-
-    const storage = createStorageAdapter();
-
-    const dynamicUsername = (selectedClient?.slug || selectedClient?.name || '').trim();
-    const mediaById = new Map(mediaItems.map((item) => [item.id, item]));
-    const carouselById = new Map(carouselPosts.map((carouselPost) => [carouselPost.id, carouselPost]));
-    const existingFeedById = new Map(existingFeedPreviewItems.map((item) => [item.id, item]));
-    const existingInstagramPosts = posts.filter((post) => parsePostType(post) === 'instagram');
-    const existingStoryPosts = existingInstagramPosts
-      .filter((post) => instagramEntryMeta(post).kind === 'story')
-      .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
-    const existingGridPosts = existingInstagramPosts
-      .filter((post) => instagramEntryMeta(post).kind === 'grid')
-      .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
-    const feedPublishItems = feedOrderItems
-      .map((orderItem) => {
-        if (orderItem.kind === 'single') {
-          const item = mediaById.get(orderItem.refId);
-          if (!item) return null;
-          return { kind: 'new-single', item };
-        }
-
-        if (orderItem.kind === 'carousel') {
-          const carouselPost = carouselById.get(orderItem.refId);
-          if (!carouselPost) return null;
-          return { kind: 'new-carousel', carouselPost };
-        }
-
-        if (orderItem.kind === 'existing-single') {
-          const existingItem = existingFeedById.get(orderItem.id);
-          if (!existingItem) return null;
-          return { kind: 'existing-single', existingItem };
-        }
-
-        if (orderItem.kind === 'existing-carousel') {
-          const existingItem = existingFeedById.get(orderItem.id);
-          if (!existingItem) return null;
-          return { kind: 'existing-carousel', existingItem };
-        }
-
-        return null;
-      })
-      .filter(Boolean);
-
-    let sortOrderCursor = 1;
-    let draftCaptionCursor = 0;
-    for (let feedIndex = 0; feedIndex < feedPublishItems.length; feedIndex += 1) {
-      const feedItem = feedPublishItems[feedIndex];
-
-      if (feedItem.kind === 'existing-single') {
-        const targetPost = feedItem.existingItem.posts[0];
-        const updateError = await updatePostSortOrder(targetPost.id, sortOrderCursor);
-        if (updateError) {
-          setStatus(`Σφάλμα ανανέωσης σειράς (${feedItem.existingItem.label}): ${updateError.message}`);
-          setBusy(false);
-          return;
-        }
-        sortOrderCursor += 1;
-        continue;
-      }
-
-      if (feedItem.kind === 'existing-carousel') {
-        for (let slideIndex = 0; slideIndex < feedItem.existingItem.posts.length; slideIndex += 1) {
-          const updateError = await updatePostSortOrder(feedItem.existingItem.posts[slideIndex].id, sortOrderCursor);
-          if (updateError) {
-            setStatus(`Σφάλμα ανανέωσης σειράς (${feedItem.existingItem.label}): ${updateError.message}`);
-            setBusy(false);
-            return;
-          }
-        }
-        sortOrderCursor += 1;
-        continue;
-      }
-
-      if (feedItem.kind === 'new-single') {
-        const file = feedItem.item.file;
-        const fileName = `${Date.now()}-single-${feedIndex}-${slugFilename(file.name)}`;
-        const path = `${session.user.id}/${fileName}`;
-
-        const { error: uploadError } = await storage.upload(path, file, { cacheControl: '3600', upsert: false });
-
-        if (uploadError) {
-          setStatus(`Σφάλμα upload (${file.name}): ${uploadError.message}`);
-          setBusy(false);
-          return;
-        }
-
-        const { data: publicData } = storage.getPublicUrl(path);
-        const payload = {
-          title: makeTypedTitle('instagram', `SINGLE::${file.name}`),
-          image_url: publicData.publicUrl,
-          image_path: path,
-          caption: captions[draftCaptionCursor] || `Post ${draftCaptionCursor + 1}: Η λεζάντα εκκρεμεί.`,
-          client_id: clientScope.value.id,
-          status: 'published',
-          approval_status: 'pending',
-          client_notes: '',
-          username: dynamicUsername,
-          like_count: 160 + draftCaptionCursor * 20,
-          sort_order: sortOrderCursor
-        };
-        const { error: insertError } = await client.from('posts').insert(payload);
-        if (insertError) {
-          setStatus(`Σφάλμα βάσης (${file.name}): ${insertError.message}`);
-          setBusy(false);
-          return;
-        }
-        draftCaptionCursor += 1;
-        sortOrderCursor += 1;
-        continue;
-      }
-
-      if (feedItem.kind === 'new-carousel') {
-        const carouselGroupId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const carouselCaption = captions[draftCaptionCursor] || `Carousel ${draftCaptionCursor + 1}: Η λεζάντα εκκρεμεί.`;
-
-        for (let slideIndex = 0; slideIndex < feedItem.carouselPost.items.length; slideIndex += 1) {
-          const slide = feedItem.carouselPost.items[slideIndex];
-          const file = slide.file;
-          const fileName = `${Date.now()}-carousel-${feedIndex}-${slideIndex}-${slugFilename(file.name)}`;
-          const path = `${session.user.id}/${fileName}`;
-
-          const { error: uploadError } = await storage.upload(path, file, { cacheControl: '3600', upsert: false });
-
-          if (uploadError) {
-            setStatus(`Σφάλμα upload (${file.name}): ${uploadError.message}`);
-            setBusy(false);
-            return;
-          }
-
-          const { data: publicData } = storage.getPublicUrl(path);
-          const payload = {
-            title: makeTypedTitle('instagram', `CAROUSEL::${carouselGroupId}::${slideIndex + 1}::${file.name}`),
-            image_url: publicData.publicUrl,
-            image_path: path,
-            caption: carouselCaption,
-            client_id: clientScope.value.id,
-            status: 'published',
-            approval_status: 'pending',
-            client_notes: '',
-            username: dynamicUsername,
-            like_count: 160,
-            sort_order: sortOrderCursor
-          };
-          const { error: insertError } = await client.from('posts').insert(payload);
-          if (insertError) {
-            setStatus(`Σφάλμα βάσης (${file.name}): ${insertError.message}`);
-            setBusy(false);
-            return;
-          }
-        }
-        draftCaptionCursor += 1;
-        sortOrderCursor += 1;
-      }
-    }
-
-    for (let i = 0; i < existingStoryPosts.length; i += 1) {
-      const updateError = await updatePostSortOrder(existingStoryPosts[i].id, sortOrderCursor + i);
-      if (updateError) {
-        setStatus(`Σφάλμα ανανέωσης story σειράς (${instagramEntryMeta(existingStoryPosts[i]).fileName || 'Story'}): ${updateError.message}`);
-        setBusy(false);
-        return;
-      }
-    }
-    sortOrderCursor += existingStoryPosts.length;
-
-    for (let i = 0; i < existingGridPosts.length; i += 1) {
-      const updateError = await updatePostSortOrder(existingGridPosts[i].id, sortOrderCursor + i);
-      if (updateError) {
-        setStatus(`Σφάλμα ανανέωσης 9άδας σειράς (${instagramEntryMeta(existingGridPosts[i]).fileName || 'Grid'}): ${updateError.message}`);
-        setBusy(false);
-        return;
-      }
-    }
-    sortOrderCursor += existingGridPosts.length;
-
-    mediaItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    carouselPosts.forEach((carouselPost) => {
-      carouselPost.items.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    });
-    setMediaItems([]);
-    setCarouselPosts([]);
-    setFeedOrderItems([]);
-    setOrderLocked(false);
-    setCaptionsText('');
-    setStatus(
-      `Ολοκληρώθηκε. Ανανεώθηκε η σειρά feed και ανέβηκαν ${mediaItems.length} single, ${carouselPosts.length} carousel posts (${carouselSlideCount} slides).`
-    );
-    await loadPosts();
-    setBusy(false);
-  }
-
-  async function handleStoriesUpload() {
-    if (!client || !session || !selectedClient) return;
-    const clientScope = await validateSelectedClientScope();
-    if (!clientScope.ok) return;
-
-    const totalUploads = instagramStoryItems.length + instagramGridItems.length;
-    if (totalUploads === 0) {
-      setStatus('Ανέβασε τουλάχιστον ένα story ή ένα PNG 9άδας.');
-      return;
-    }
-
-    setBusy(true);
-    setStatus('Γίνεται ανέβασμα stories και 9άδας...');
-
-    const storage = createStorageAdapter();
-    const dynamicUsername = (selectedClient?.slug || selectedClient?.name || '').trim();
-    const existingInstagramPosts = posts.filter((post) => parsePostType(post) === 'instagram');
-    const existingFeedPosts = existingInstagramPosts.filter((post) => {
-      const kind = instagramEntryMeta(post).kind;
-      return kind !== 'story' && kind !== 'grid';
-    });
-    const existingStoryPosts = existingInstagramPosts
-      .filter((post) => instagramEntryMeta(post).kind === 'story')
-      .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
-    const existingGridPosts = existingInstagramPosts
-      .filter((post) => instagramEntryMeta(post).kind === 'grid')
-      .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
-
-    let sortOrderCursor = existingFeedPosts.reduce(
-      (max, post) => Math.max(max, Number(post.sort_order) || 0),
-      0
-    ) + 1;
-
-    for (let i = 0; i < existingStoryPosts.length; i += 1) {
-      const updateError = await updatePostSortOrder(existingStoryPosts[i].id, sortOrderCursor + i);
-      if (updateError) {
-        setStatus(`Σφάλμα ανανέωσης story σειράς (${instagramEntryMeta(existingStoryPosts[i]).fileName || 'Story'}): ${updateError.message}`);
-        setBusy(false);
-        return;
-      }
-    }
-    sortOrderCursor += existingStoryPosts.length;
-
-    for (let i = 0; i < instagramStoryItems.length; i += 1) {
-      const storyItem = instagramStoryItems[i];
-      const file = storyItem.file;
-      const fileName = `${Date.now()}-story-${i}-${slugFilename(file.name)}`;
-      const path = `${session.user.id}/${fileName}`;
-      const { error: uploadError } = await storage.upload(path, file, { cacheControl: '3600', upsert: false });
-
-      if (uploadError) {
-        setStatus(`Σφάλμα upload story (${file.name}): ${uploadError.message}`);
-        setBusy(false);
-        return;
-      }
-
-      const { data: publicData } = storage.getPublicUrl(path);
-      const payload = {
-        title: makeTypedTitle('instagram', `STORY::${file.name}`),
-        image_url: publicData.publicUrl,
-        image_path: path,
-        caption: '',
-        client_id: clientScope.value.id,
-        status: 'published',
-        approval_status: 'pending',
-        client_notes: '',
-        username: dynamicUsername,
-        like_count: 0,
-        sort_order: sortOrderCursor + i
-      };
-      const { error: insertError } = await client.from('posts').insert(payload);
-      if (insertError) {
-        setStatus(`Σφάλμα βάσης story (${file.name}): ${insertError.message}`);
-        setBusy(false);
-        return;
-      }
-    }
-    sortOrderCursor += instagramStoryItems.length;
-
-    for (let i = 0; i < existingGridPosts.length; i += 1) {
-      const updateError = await updatePostSortOrder(existingGridPosts[i].id, sortOrderCursor + i);
-      if (updateError) {
-        setStatus(`Σφάλμα ανανέωσης 9άδας σειράς (${instagramEntryMeta(existingGridPosts[i]).fileName || 'Grid'}): ${updateError.message}`);
-        setBusy(false);
-        return;
-      }
-    }
-    sortOrderCursor += existingGridPosts.length;
-
-    if (instagramGridItems.length > 0) {
-      const gridItem = instagramGridItems[0];
-      const file = gridItem.file;
-      const fileName = `${Date.now()}-grid9-${slugFilename(file.name)}`;
-      const path = `${session.user.id}/${fileName}`;
-      const { error: uploadError } = await storage.upload(path, file, { cacheControl: '3600', upsert: false });
-      if (uploadError) {
-        setStatus(`Σφάλμα upload 9άδας (${file.name}): ${uploadError.message}`);
-        setBusy(false);
-        return;
-      }
-      const { data: publicData } = storage.getPublicUrl(path);
-      const payload = {
-        title: makeTypedTitle('instagram', `GRID9::${file.name}`),
-        image_url: publicData.publicUrl,
-        image_path: path,
-        caption: 'Έτσι θα διαμορφωθεί το Instagram feed σας μετά τη δημοσίευση όλων των posts.',
-        client_id: clientScope.value.id,
-        status: 'published',
-        approval_status: 'pending',
-        client_notes: '',
-        username: dynamicUsername,
-        like_count: 0,
-        sort_order: sortOrderCursor
-      };
-      const { error: insertError } = await client.from('posts').insert(payload);
-      if (insertError) {
-        setStatus(`Σφάλμα βάσης 9άδας (${file.name}): ${insertError.message}`);
-        setBusy(false);
-        return;
-      }
-    }
-
-    instagramStoryItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    instagramGridItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    setInstagramStoryItems([]);
-    setInstagramGridItems([]);
-    setStatus(
-      `Ολοκληρώθηκε. Ανέβηκαν ${instagramStoryItems.length} stories${instagramGridItems.length > 0 ? ' και 1 αρχείο 9άδας' : ''}.`
-    );
-    await loadPosts();
-    setBusy(false);
   }
 
   function createPreviewUrl(contentType = 'instagram') {
@@ -2549,90 +1479,9 @@ function AdminApp() {
     }
   }
 
-  async function deleteLogoKitPermanently(logoKit) {
-    if (!client || !logoKit) return;
-    const confirmed = window.confirm(`Να διαγραφεί οριστικά το "${logoKit.title}";`);
-    if (!confirmed) return;
-
-    setBusy(true);
-    setStatus(`Διαγραφή ${logoKit.title}...`);
-    const storage = createStorageAdapter();
-
-    const { data: assets, error: assetsError } = await client
-      .from('logo_assets')
-      .select('id,file_path')
-      .eq('logo_kit_id', logoKit.id);
-
-    if (assetsError) {
-      setStatus(`Σφάλμα φόρτωσης assets: ${assetsError.message}`);
-      setBusy(false);
-      return;
-    }
-
-    const paths = (assets || []).map((asset) => asset.file_path).filter(Boolean);
-    if (paths.length > 0) {
-      const { error: storageError } = await storage.remove(paths);
-      if (storageError) {
-        setStatus(`Σφάλμα διαγραφής storage: ${storageError.message}`);
-        setBusy(false);
-        return;
-      }
-    }
-
-    const { error: deleteKitError } = await client.from('logo_kits').delete().eq('id', logoKit.id);
-    if (deleteKitError) {
-      setStatus(`Σφάλμα διαγραφής logo kit: ${deleteKitError.message}`);
-      setBusy(false);
-      return;
-    }
-
-    setStatus(`Το "${logoKit.title}" διαγράφηκε οριστικά.`);
-    await loadLogoKits();
-    setBusy(false);
-  }
-
   async function deleteAllPostsPermanently() {
     if (activeTab === 'logo') {
-      if (!client || logoKits.length === 0) return;
-      const confirmedLogoDelete = window.confirm(`Να διαγραφούν ΟΛΑ τα ${logoKits.length} logo kits; Αυτή η ενέργεια δεν αναιρείται.`);
-      if (!confirmedLogoDelete) return;
-
-      setBusy(true);
-      setStatus('Γίνεται οριστική διαγραφή όλων των logo kits...');
-      const storage = createStorageAdapter();
-
-      const kitIds = logoKits.map((kit) => kit.id);
-      const { data: assets, error: assetsError } = await client
-        .from('logo_assets')
-        .select('file_path')
-        .in('logo_kit_id', kitIds);
-
-      if (assetsError) {
-        setStatus(`Σφάλμα φόρτωσης logo assets: ${assetsError.message}`);
-        setBusy(false);
-        return;
-      }
-
-      const paths = (assets || []).map((asset) => asset.file_path).filter(Boolean);
-      if (paths.length > 0) {
-        const { error: storageError } = await storage.remove(paths);
-        if (storageError) {
-          setStatus(`Σφάλμα διαγραφής storage: ${storageError.message}`);
-          setBusy(false);
-          return;
-        }
-      }
-
-      const { error: deleteKitsError } = await client.from('logo_kits').delete().eq('client_id', selectedClient.id);
-      if (deleteKitsError) {
-        setStatus(`Σφάλμα διαγραφής logo kits: ${deleteKitsError.message}`);
-        setBusy(false);
-        return;
-      }
-
-      setStatus('Όλα τα logo kits διαγράφηκαν οριστικά.');
-      await loadLogoKits();
-      setBusy(false);
+      await logo.deleteAllLogoKitsPermanently();
       return;
     }
 
@@ -2669,186 +1518,13 @@ function AdminApp() {
     setBusy(false);
   }
 
-  const existingFeedPreviewItems = useMemo(() => {
-    const next = [];
-    const carouselEntries = new Map();
-
-    posts
-      .filter((post) => parsePostType(post) === 'instagram')
-      .forEach((post) => {
-        const meta = instagramEntryMeta(post);
-
-        if (meta.kind === 'story' || meta.kind === 'grid') return;
-
-        if (meta.kind === 'carousel') {
-          const groupId = meta.groupId || post.id;
-          let entry = carouselEntries.get(groupId);
-
-          if (!entry) {
-            entry = {
-              id: `existing-carousel:${groupId}`,
-              kind: 'existing-carousel',
-              refId: groupId,
-              label: '',
-              removable: false,
-              previewMedia: {
-                kind: isVideoPost(post) ? 'video' : 'image',
-                previewUrl: post.image_url,
-                file: { name: meta.fileName || `Carousel ${groupId}` }
-              },
-              posts: [],
-              sortOrder: Number.isFinite(post.sort_order) ? post.sort_order : 0
-            };
-            carouselEntries.set(groupId, entry);
-            next.push(entry);
-          }
-
-          entry.posts.push(post);
-          entry.sortOrder = Math.min(entry.sortOrder, Number.isFinite(post.sort_order) ? post.sort_order : entry.sortOrder);
-          return;
-        }
-
-        next.push({
-          id: `existing-single:${post.id}`,
-          kind: 'existing-single',
-          refId: post.id,
-          label: meta.fileName || stripPostTypePrefix(post.title),
-          removable: false,
-          previewMedia: {
-            kind: isVideoPost(post) ? 'video' : 'image',
-            previewUrl: post.image_url,
-            file: { name: meta.fileName || stripPostTypePrefix(post.title) || 'Feed post' }
-          },
-          posts: [post],
-          sortOrder: Number.isFinite(post.sort_order) ? post.sort_order : 0
-        });
-      });
-
-    next.forEach((entry) => {
-      if (entry.kind !== 'existing-carousel') return;
-
-      entry.posts.sort((a, b) => {
-        const aMeta = instagramEntryMeta(a);
-        const bMeta = instagramEntryMeta(b);
-        return aMeta.slideOrder - bMeta.slideOrder;
-      });
-      entry.label = `Carousel (${entry.posts.length} slides)`;
-    });
-
-    return next;
-  }, [posts]);
-
-  const existingFeedOrderItems = useMemo(
-    () => existingFeedPreviewItems.map((item) => ({ id: item.id, kind: item.kind, refId: item.refId })),
-    [existingFeedPreviewItems]
-  );
-
-  const existingFeedPreviewMap = useMemo(
-    () => new Map(existingFeedPreviewItems.map((item) => [item.id, item])),
-    [existingFeedPreviewItems]
-  );
-
-  useEffect(() => {
-    setFeedOrderItems((prev) => {
-      const preservedDraftItems = prev.filter((item) => !isExistingFeedOrderEntry(item));
-      const knownEntries = new Map([
-        ...existingFeedOrderItems.map((item) => [item.id, item]),
-        ...preservedDraftItems.map((item) => [item.id, item])
-      ]);
-      const next = [];
-      const seen = new Set();
-
-      prev.forEach((item) => {
-        const resolved = knownEntries.get(item.id);
-        if (!resolved || seen.has(item.id)) return;
-        next.push(resolved);
-        seen.add(item.id);
-      });
-
-      existingFeedOrderItems.forEach((item) => {
-        if (seen.has(item.id)) return;
-        next.push(item);
-        seen.add(item.id);
-      });
-
-      preservedDraftItems.forEach((item) => {
-        if (seen.has(item.id)) return;
-        next.push(item);
-        seen.add(item.id);
-      });
-
-      if (
-        next.length === prev.length &&
-        next.every((item, index) => item.id === prev[index]?.id && item.kind === prev[index]?.kind && item.refId === prev[index]?.refId)
-      ) {
-        return prev;
-      }
-
-      return next;
-    });
-  }, [existingFeedOrderItems]);
-
-  const feedPreviewItems = useMemo(() => {
-    const mediaById = new Map(mediaItems.map((item) => [item.id, item]));
-    const carouselById = new Map(carouselPosts.map((carouselPost) => [carouselPost.id, carouselPost]));
-
-    return feedOrderItems
-      .map((orderItem) => {
-        if (orderItem.kind === 'single') {
-          const item = mediaById.get(orderItem.refId);
-          if (!item) return null;
-          return {
-            id: orderItem.id,
-            kind: 'single',
-            label: item.file.name,
-            removable: true,
-            removeId: item.id,
-            previewMedia: item
-          };
-        }
-
-        if (orderItem.kind === 'carousel') {
-          const carouselPost = carouselById.get(orderItem.refId);
-          if (!carouselPost) return null;
-          return {
-            id: orderItem.id,
-            kind: 'carousel',
-            label: `Carousel (${carouselPost.items.length} slides)`,
-            removable: true,
-            removeId: carouselPost.id,
-            previewMedia: carouselPost.items[0]
-          };
-        }
-
-        const existingItem = existingFeedPreviewMap.get(orderItem.id);
-        if (!existingItem) return null;
-        return {
-          ...existingItem,
-          kind: existingItem.kind === 'existing-carousel' ? 'carousel' : 'single'
-        };
-      })
-      .filter(Boolean);
-  }, [feedOrderItems, mediaItems, carouselPosts, existingFeedPreviewMap]);
-
-  const parsedCaptions = useMemo(() => parseCaptions(captionsText), [captionsText]);
-  const plannedFeedPostCount = feedOrderItems.filter((item) => item.kind === 'single' || item.kind === 'carousel').length;
-  const carouselSlideCount = carouselPosts.reduce((sum, carouselPost) => sum + carouselPost.items.length, 0);
-  const mappedCaptions = Array.from({ length: plannedFeedPostCount }).reduce((sum, _item, index) => sum + (parsedCaptions[index] ? 1 : 0), 0);
-  const hasDraftSingleUploads = mediaItems.length > 0;
-  const hasDraftCarouselUploads = carouselPosts.length > 0;
-  const hasDraftFeedItems = feedOrderItems.some((item) => item.kind === 'single' || item.kind === 'carousel');
-  const currentExistingFeedOrderIds = feedOrderItems.filter((item) => isExistingFeedOrderEntry(item)).map((item) => item.id);
-  const hasExistingFeedReorder =
-    currentExistingFeedOrderIds.length === existingFeedOrderItems.length &&
-    currentExistingFeedOrderIds.some((id, index) => id !== existingFeedOrderItems[index]?.id);
-  const requiresLockedFeedOrder = hasDraftFeedItems || hasExistingFeedReorder;
   const scopedPosts = useMemo(
     () => posts.filter((post) => parsePostType(post) === activeTab),
     [posts, activeTab]
   );
   const scopedReviewItems = useMemo(
-    () => (activeTab === 'logo' ? logoKits : scopedPosts),
-    [activeTab, logoKits, scopedPosts]
+    () => (activeTab === 'logo' ? logo.logoKits : scopedPosts),
+    [activeTab, logo.logoKits, scopedPosts]
   );
   const approvalOverview = useMemo(
     () =>
@@ -2943,386 +1619,62 @@ function AdminApp() {
           {activeTab === 'instagram' && (
             <InstagramFeedAdmin
               busy={busy}
-              dragActive={dragActive}
-              orderLocked={orderLocked}
-              carouselPosts={carouselPosts}
-              feedPreviewItems={feedPreviewItems}
-              captionsText={captionsText}
-              mappedCaptions={mappedCaptions}
-              plannedFeedPostCount={plannedFeedPostCount}
-              instagramGridItems={instagramGridItems}
-              instagramStoryItems={instagramStoryItems}
-              setDragActive={setDragActive}
-              setDraggedId={setDraggedId}
-              setCaptionsText={setCaptionsText}
-              setOrderLocked={setOrderLocked}
-              appendFiles={appendFiles}
-              appendCarouselFiles={appendCarouselFiles}
-              removeCarouselPost={removeCarouselPost}
-              removeCarouselMedia={removeCarouselMedia}
-              handleTileDrop={handleTileDrop}
-              handleCarouselSlideDrop={handleCarouselSlideDrop}
-              setDraggedCarouselSlideId={setDraggedCarouselSlideId}
-              removeMedia={removeMedia}
-              clearMedia={clearMedia}
-              clearCarouselUploads={clearCarouselUploads}
-              hasDraftSingleUploads={hasDraftSingleUploads}
-              hasDraftCarouselUploads={hasDraftCarouselUploads}
-              requiresLockedFeedOrder={requiresLockedFeedOrder}
-              hasPendingFeedChanges={hasDraftFeedItems || hasExistingFeedReorder}
-              appendInstagramGridFiles={appendInstagramGridFiles}
-              clearInstagramGrid={() =>
-                setInstagramGridItems((prev) => {
-                  prev.forEach((gridItem) => URL.revokeObjectURL(gridItem.previewUrl));
-                  return [];
-                })
-              }
-              appendInstagramStories={appendInstagramStories}
-              removeInstagramStoryItem={removeInstagramStoryItem}
-              onSubmitFeed={handleFeedUpload}
-              onSubmitStories={handleStoriesUpload}
+              {...instagram}
             />
           )}
 
           {activeTab === 'article' && (
-            <Form onSubmit={(event) => event.preventDefault()}>
-              <Step>
-                <StepTitle>Primary workflow</StepTitle>
-                <State>Drafts: {articleDrafts.length}</State>
-                <Actions>
-                  <ActionButton type="button" onClick={addArticleDraft}>
-                    Νέο
-                  </ActionButton>
-                  <ActionButton type="button" $type="primary" disabled={busy} onClick={publishArticles}>
-                    Δημοσίευση
-                  </ActionButton>
-                </Actions>
-              </Step>
-
-              <CollapsiblePanel title="Drafts (Advanced)">
-                {articleDrafts.map((draft, index) => (
-                  <Step key={draft.id}>
-                    <StepTitle>Άρθρο {index + 1}</StepTitle>
-                    <label>
-                      Τίτλος
-                      <CaptionInput
-                        rows="2"
-                        value={draft.title}
-                        onChange={(event) => updateArticleDraftField(draft.id, 'title', event.target.value)}
-                        placeholder="Γράψε τίτλο άρθρου"
-                      />
-                    </label>
-                    <label>
-                      Κείμενο
-                      <CaptionInput
-                        rows="8"
-                        value={draft.body}
-                        onChange={(event) => updateArticleDraftField(draft.id, 'body', event.target.value)}
-                        placeholder="Γράψε το κείμενο που θα εγκρίνει ο πελάτης"
-                      />
-                    </label>
-                    <FilePicker>
-                      <FilePickerButton>Εικόνα</FilePickerButton>
-                      <FileInput
-                        type="file"
-                        accept="image/*"
-                        onChange={(event) => {
-                          setArticleDraftFile(draft.id, (event.target.files || [])[0]);
-                          event.target.value = '';
-                        }}
-                      />
-                    </FilePicker>
-                    {draft.imagePreview && (
-                      <ArticleDraftPreview>
-                        <img src={draft.imagePreview} alt={draft.title || 'Προεπισκόπηση άρθρου'} loading="lazy" />
-                      </ArticleDraftPreview>
-                    )}
-                    <Actions>
-                      <ActionButton type="button" $type="danger" onClick={() => removeArticleDraft(draft.id)}>
-                        Αφαίρεση
-                      </ActionButton>
-                    </Actions>
-                  </Step>
-                ))}
-              </CollapsiblePanel>
-            </Form>
+            <ArticleTabPanel
+              article={{
+                busy,
+                ...article
+              }}
+              ui={{
+                Form,
+                Step,
+                StepTitle,
+                State,
+                Actions,
+                ActionButton,
+                CaptionInput,
+                FilePicker,
+                FilePickerButton,
+                FileInput,
+                ArticleDraftPreview
+              }}
+            />
           )}
 
           {activeTab === 'logo' && (
-            <Form onSubmit={(event) => event.preventDefault()}>
-              <Step>
-                <StepTitle>Primary workflow</StepTitle>
-                <label>
-                  Brand Name
-                  <InlineInput
-                    value={logoBrandName}
-                    onChange={(event) => setLogoBrandName(event.target.value)}
-                    placeholder="Luko pops"
-                  />
-                </label>
-                <label>
-                  Agency Name
-                  <InlineInput
-                    value={logoAgencyName}
-                    onChange={(event) => setLogoAgencyName(event.target.value)}
-                    placeholder="Doitforme"
-                  />
-                </label>
-                <label>
-                  Tagline
-                  <InlineInput
-                    value={logoTagline}
-                    onChange={(event) => setLogoTagline(event.target.value)}
-                    placeholder="Pop into happiness"
-                  />
-                </label>
-                <label>
-                  Concept Label (footer)
-                  <InlineInput
-                    value={logoConceptLabel}
-                    onChange={(event) => setLogoConceptLabel(event.target.value)}
-                    placeholder="Concept 1"
-                  />
-                </label>
-                <label>
-                  Short Brand Description (για Symbol/Mascot slide)
-                  <CaptionInput
-                    rows="4"
-                    value={logoShortDescription}
-                    onChange={(event) => setLogoShortDescription(event.target.value)}
-                    placeholder="Σύντομη περιγραφή έμπνευσης και κατεύθυνσης brand..."
-                  />
-                </label>
-              </Step>
-
-              <CollapsiblePanel title="Assets (Advanced)">
-              <Step>
-                <StepTitle>Inspiration (Nature -> Result)</StepTitle>
-                <Dropzone
-                  $active={dragActive}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    setDragActive(true);
-                  }}
-                  onDragLeave={() => setDragActive(false)}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    setDragActive(false);
-                    appendSingleImage(setLogoInspirationItems, event.dataTransfer.files, 'Επίλεξε εικόνα inspiration.');
-                  }}
-                >
-                  <DropText>Inspiration image (.jpg/.jpeg/.png/.svg)</DropText>
-                  <FilePicker>
-                    <FilePickerButton>Inspire</FilePickerButton>
-                    <FileInput
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        appendSingleImage(setLogoInspirationItems, event.target.files || [], 'Επίλεξε εικόνα inspiration.');
-                        event.target.value = '';
-                      }}
-                    />
-                  </FilePicker>
-                </Dropzone>
-                {logoInspirationItems.length > 0 && (
-                  <MediaGrid>
-                    {logoInspirationItems.map((item) => (
-                      <MediaTile key={item.id}>
-                        <MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb>
-                        <MediaName>{item.file.name}</MediaName>
-                        <ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoInspirationItems, item.id)}>Αφαίρεση</ActionButton>
-                      </MediaTile>
-                    ))}
-                  </MediaGrid>
-                )}
-                <Dropzone
-                  $active={dragActive}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    setDragActive(true);
-                  }}
-                  onDragLeave={() => setDragActive(false)}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    setDragActive(false);
-                    appendSingleImage(setLogoInspirationResultItems, event.dataTransfer.files, 'Επίλεξε image τελικού αποτελέσματος.');
-                  }}
-                >
-                  <DropText>Result image (.png/.svg/.jpg/.jpeg)</DropText>
-                  <FilePicker>
-                    <FilePickerButton>Result</FilePickerButton>
-                    <FileInput
-                      type="file"
-                      accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg"
-                      onChange={(event) => {
-                        appendSingleImage(setLogoInspirationResultItems, event.target.files || [], 'Επίλεξε image τελικού αποτελέσματος.');
-                        event.target.value = '';
-                      }}
-                    />
-                  </FilePicker>
-                </Dropzone>
-                {logoInspirationResultItems.length > 0 && (
-                  <Actions>
-                    {logoInspirationResultItems.map((item) => (
-                      <ActionButton key={item.id} type="button" onClick={() => removeUploadItem(setLogoInspirationResultItems, item.id)}>
-                        Αφαίρεση
-                      </ActionButton>
-                    ))}
-                  </Actions>
-                )}
-              </Step>
-
-              <Step>
-                <StepTitle>Logo Upload</StepTitle>
-                <MutedSmall>Main Logo / Secondary / Logomark / Variations</MutedSmall>
-                <Actions>
-                  <FilePicker>
-                    <FilePickerButton>Main</FilePickerButton>
-                    <FileInput type="file" accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg" onChange={(event) => { appendSingleImage(setLogoMainLogoItems, event.target.files || [], 'Main Logo δέχεται μόνο .png/.svg/.jpg/.jpeg'); event.target.value = ''; }} />
-                  </FilePicker>
-                  <FilePicker>
-                    <FilePickerButton>Secondary</FilePickerButton>
-                    <FileInput type="file" accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg" onChange={(event) => { appendSingleImage(setLogoSecondaryLogoItems, event.target.files || [], 'Secondary Logo δέχεται μόνο .png/.svg/.jpg/.jpeg'); event.target.value = ''; }} />
-                  </FilePicker>
-                  <FilePicker>
-                    <FilePickerButton>Logomark</FilePickerButton>
-                    <FileInput type="file" accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg" onChange={(event) => { appendSingleImage(setLogoLogomarkItems, event.target.files || [], 'Logomark δέχεται μόνο .png/.svg/.jpg/.jpeg'); event.target.value = ''; }} />
-                  </FilePicker>
-                  <FilePicker>
-                    <FilePickerButton>Variants</FilePickerButton>
-                    <FileInput type="file" accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg" multiple onChange={(event) => { appendMultiImages(setLogoVariationItems, event.target.files || [], isPngOrSvgFile, 'Logo Variations δέχονται μόνο .png/.svg/.jpg/.jpeg'); event.target.value = ''; }} />
-                  </FilePicker>
-                </Actions>
-                <MediaGrid>
-                  {logoMainLogoItems.map((item) => (
-                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Main: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoMainLogoItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>
-                  ))}
-                  {logoSecondaryLogoItems.map((item) => (
-                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Secondary: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoSecondaryLogoItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>
-                  ))}
-                  {logoLogomarkItems.map((item) => (
-                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Logomark: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoLogomarkItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>
-                  ))}
-                  {logoVariationItems.map((item) => (
-                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Variation: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoVariationItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>
-                  ))}
-                </MediaGrid>
-              </Step>
-
-              <Step>
-                <StepTitle>Mascot Upload (Optional)</StepTitle>
-                <Actions>
-                  <FilePicker>
-                    <FilePickerButton>Mascot</FilePickerButton>
-                    <FileInput type="file" accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg" onChange={(event) => { appendSingleImage(setLogoMascotPrimaryItems, event.target.files || [], 'Mascot primary δέχεται μόνο .png/.svg/.jpg/.jpeg'); event.target.value = ''; }} />
-                  </FilePicker>
-                  <FilePicker>
-                    <FilePickerButton>Poses</FilePickerButton>
-                    <FileInput type="file" accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg" multiple onChange={(event) => { appendMultiImages(setLogoMascotPoseItems, event.target.files || [], isPngOrSvgFile, 'Mascot poses δέχονται μόνο .png/.svg/.jpg/.jpeg'); event.target.value = ''; }} />
-                  </FilePicker>
-                </Actions>
-                <MediaGrid>
-                  {logoMascotPrimaryItems.map((item) => (
-                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Mascot: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoMascotPrimaryItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>
-                  ))}
-                  {logoMascotPoseItems.map((item) => (
-                    <MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Pose: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoMascotPoseItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>
-                  ))}
-                </MediaGrid>
-              </Step>
-
-              <Step>
-                <StepTitle>Typography Upload</StepTitle>
-                <Actions>
-                  <FilePicker>
-                    <FilePickerButton>Primary</FilePickerButton>
-                    <FileInput type="file" accept=".otf,.ttf" onChange={(event) => { appendSingleFont(setLogoPrimaryFontItems, event.target.files || []); event.target.value = ''; }} />
-                  </FilePicker>
-                  <FilePicker>
-                    <FilePickerButton>Secondary</FilePickerButton>
-                    <FileInput type="file" accept=".otf,.ttf" onChange={(event) => { appendSingleFont(setLogoSecondaryFontItems, event.target.files || []); event.target.value = ''; }} />
-                  </FilePicker>
-                  <FilePicker>
-                    <FilePickerButton>Extras</FilePickerButton>
-                    <FileInput type="file" accept=".otf,.ttf" multiple onChange={(event) => { appendExtraFonts(event.target.files || []); event.target.value = ''; }} />
-                  </FilePicker>
-                </Actions>
-                <Actions>
-                  {logoPrimaryFontItems.map((item) => <ActionButton key={item.id} type="button" onClick={() => removeUploadItem(setLogoPrimaryFontItems, item.id)}>Αφαίρεση</ActionButton>)}
-                  {logoSecondaryFontItems.map((item) => <ActionButton key={item.id} type="button" onClick={() => removeUploadItem(setLogoSecondaryFontItems, item.id)}>Αφαίρεση</ActionButton>)}
-                  {logoExtraFontItems.map((item) => <ActionButton key={item.id} type="button" onClick={() => removeUploadItem(setLogoExtraFontItems, item.id)}>Αφαίρεση</ActionButton>)}
-                </Actions>
-              </Step>
-
-              <Step>
-                <StepTitle>Color Palette (HEX)</StepTitle>
-                <MutedSmall>Primary colors</MutedSmall>
-                <Actions>
-                  {logoPrimaryColorInputs.map((value, index) => {
-                    const normalized = normalizeHexColor(value);
-                    return (
-                      <ColorChip key={`primary-input-${index}`} as="div">
-                        <ColorSwatch $color={normalized || 'transparent'} />
-                        <InlineInput value={value} onChange={(event) => updatePrimaryColorInput(index, event.target.value)} placeholder={`Primary ${index + 1}`} />
-                        <ActionButton type="button" $type="danger" onClick={() => removePrimaryColorInput(index)}>Αφαίρεση</ActionButton>
-                      </ColorChip>
-                    );
-                  })}
-                </Actions>
-                <Actions>
-                  <ActionButton type="button" onClick={addPrimaryColorInput}>Προσθήκη</ActionButton>
-                </Actions>
-                <MutedSmall>Secondary colors</MutedSmall>
-                <Actions>
-                  {logoSecondaryColorInputs.map((value, index) => {
-                    const normalized = normalizeHexColor(value);
-                    return (
-                      <ColorChip key={`secondary-input-${index}`} as="div">
-                        <ColorSwatch $color={normalized || 'transparent'} />
-                        <InlineInput value={value} onChange={(event) => updateSecondaryColorInput(index, event.target.value)} placeholder={`Secondary ${index + 1}`} />
-                        <ActionButton type="button" $type="danger" onClick={() => removeSecondaryColorInput(index)}>Αφαίρεση</ActionButton>
-                      </ColorChip>
-                    );
-                  })}
-                </Actions>
-                <Actions>
-                  <ActionButton type="button" onClick={addSecondaryColorInput}>Προσθήκη</ActionButton>
-                </Actions>
-              </Step>
-
-              <Step>
-                <StepTitle>Mockups / Applications</StepTitle>
-                <Actions>
-                  <FilePicker>
-                    <FilePickerButton>Pattern</FilePickerButton>
-                    <FileInput type="file" accept="image/*" multiple onChange={(event) => { appendMultiImages(setLogoPatternItems, event.target.files || [], isLogoVisualFile, 'Pattern δέχεται μόνο εικόνες.'); event.target.value = ''; }} />
-                  </FilePicker>
-                  <FilePicker>
-                    <FilePickerButton>Mockups</FilePickerButton>
-                    <FileInput type="file" accept="image/*" multiple onChange={(event) => { appendMultiImages(setLogoMockupItems, event.target.files || [], isLogoVisualFile, 'Mockups δέχονται μόνο εικόνες.'); event.target.value = ''; }} />
-                  </FilePicker>
-                  <FilePicker>
-                    <FilePickerButton>Stickers</FilePickerButton>
-                    <FileInput type="file" accept="image/*" multiple onChange={(event) => { appendMultiImages(setLogoStickerItems, event.target.files || [], isLogoVisualFile, 'Stickers δέχονται μόνο εικόνες.'); event.target.value = ''; }} />
-                  </FilePicker>
-                </Actions>
-                <MediaGrid>
-                  {logoPatternItems.map((item) => (<MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Pattern: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoPatternItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>))}
-                  {logoMockupItems.map((item) => (<MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Mockup: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoMockupItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>))}
-                  {logoStickerItems.map((item) => (<MediaTile key={item.id}><MediaThumb><img src={item.previewUrl} alt={item.file.name} loading="lazy" /></MediaThumb><MediaName>Sticker: {item.file.name}</MediaName><ActionButton type="button" $type="danger" onClick={() => removeUploadItem(setLogoStickerItems, item.id)}>Αφαίρεση</ActionButton></MediaTile>))}
-                </MediaGrid>
-              </Step>
-              </CollapsiblePanel>
-
-              <Actions>
-                <ActionButton type="button" $type="danger" onClick={clearLogoDraft}>
-                  Καθαρισμός
-                </ActionButton>
-                <ActionButton type="button" $type="primary" disabled={busy} onClick={publishLogoKit}>
-                  Δημοσίευση
-                </ActionButton>
-              </Actions>
-            </Form>
+            <LogoKitTabPanel
+              logo={{
+                busy,
+                dragActive,
+                setDragActive,
+                ...logo
+              }}
+              ui={{
+                Form,
+                Step,
+                StepTitle,
+                InlineInput,
+                CaptionInput,
+                Dropzone,
+                DropText,
+                FilePicker,
+                FilePickerButton,
+                FileInput,
+                MediaGrid,
+                MediaTile,
+                MediaThumb,
+                MediaName,
+                Actions,
+                ActionButton,
+                MutedSmall,
+                ColorChip,
+                ColorSwatch
+              }}
+            />
           )}
 
           <WorkflowActionGroup>
@@ -3372,7 +1724,7 @@ function AdminApp() {
           {activeTab === 'logo' && scopedReviewItems.length === 0 ? (
             <State>Δεν υπάρχουν logo kits ακόμα.</State>
           ) : activeTab === 'logo' ? (
-            logoKits.map((kit) => (
+            logo.logoKits.map((kit) => (
               <Row key={kit.id}>
                 <RowMain>
                   <RowHead>
@@ -3399,7 +1751,7 @@ function AdminApp() {
                         label: 'Διαγραφή',
                         type: 'danger',
                         disabled: busy,
-                        onClick: () => deleteLogoKitPermanently(kit)
+                        onClick: () => logo.deleteLogoKitPermanently(kit)
                       }
                     ]}
                   />
