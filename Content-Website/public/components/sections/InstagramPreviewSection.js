@@ -26,6 +26,8 @@ function InstagramPreviewSection({
   const [storyProgress, setStoryProgress] = React.useState(0);
   const selectedStorySafeIndex = storyItems.length > 0 ? Math.min(selectedStoryIndex, storyItems.length - 1) : -1;
   const isViewerOpen = viewerStoryIndex >= 0 && viewerStoryIndex < storyItems.length;
+  const activeStoryIndex = isViewerOpen ? viewerStoryIndex : selectedStorySafeIndex;
+  const activeStoryItem = activeStoryIndex >= 0 ? storyItems[activeStoryIndex] : null;
   const activeViewerItem = isViewerOpen ? storyItems[viewerStoryIndex] : null;
   const activeViewerPost = activeViewerItem?.post || null;
   const viewerIsVideo = activeViewerPost ? isVideoPost(activeViewerPost) : false;
@@ -226,10 +228,10 @@ function InstagramPreviewSection({
                         height: '74px',
                         padding: '3px',
                         borderRadius: '999px',
-                        background: selectedStorySafeIndex === idx
+                        background: activeStoryIndex === idx
                           ? 'linear-gradient(135deg, var(--focus), var(--mainLight), var(--error))'
                           : 'linear-gradient(135deg, color-mix(in srgb, var(--focus) 60%, transparent), color-mix(in srgb, var(--mainLight) 45%, transparent), color-mix(in srgb, var(--error) 55%, transparent))',
-                        boxShadow: selectedStorySafeIndex === idx
+                        boxShadow: activeStoryIndex === idx
                           ? '0 0 0 2px color-mix(in srgb, var(--focus) 18%, transparent)'
                           : 'none'
                       }
@@ -407,6 +409,25 @@ function InstagramPreviewSection({
                       viewerStoryIndex + 1 < storyItems.length ? 'Επόμενο' : 'Τέλος'
                     )
                   )
+                )
+              : null,
+            activeStoryItem
+              ? React.createElement(
+                  'div',
+                  { style: { ...storiesPreviewFrameStyle, marginTop: '1rem' } },
+                  React.createElement(PostCard, {
+                    key: `story-review-${activeStoryItem.key}`,
+                    post: activeStoryItem.post,
+                    postIds: activeStoryItem.postIds,
+                    instagramKind: activeStoryItem.kind,
+                    index: activeStoryIndex,
+                    pending: savingId === activeStoryItem.savingKey,
+                    onUpdateReview: updateReview,
+                    historyEntries: notesHistoryByPost[activeStoryItem.historyKey] || [],
+                    onAppendHistory: (postKey, text, action) => appendNoteHistory(activeStoryItem.historyKey, text, action),
+                    previewMode,
+                    clientName: clientMeta?.name || ''
+                  })
                 )
               : null
           )
