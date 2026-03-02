@@ -71,6 +71,37 @@ async function ensureServiceWorkerRegistration() {
     scope: '/'
   });
 
+  if (!registration.active) {
+    await new Promise((resolve, reject) => {
+      const worker = registration.installing || registration.waiting;
+      if (!worker) {
+        window.setTimeout(resolve, 0);
+        return;
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        reject(new Error('Ο service worker δεν ενεργοποιήθηκε έγκαιρα. Κάνε refresh και δοκίμασε ξανά.'));
+      }, 8000);
+
+      function handleStateChange() {
+        if (worker.state === 'activated') {
+          window.clearTimeout(timeoutId);
+          worker.removeEventListener('statechange', handleStateChange);
+          resolve();
+        }
+
+        if (worker.state === 'redundant') {
+          window.clearTimeout(timeoutId);
+          worker.removeEventListener('statechange', handleStateChange);
+          reject(new Error('Ο service worker απέτυχε να εγκατασταθεί. Κάνε Unregister και δοκίμασε ξανά.'));
+        }
+      }
+
+      worker.addEventListener('statechange', handleStateChange);
+      handleStateChange();
+    });
+  }
+
   await navigator.serviceWorker.ready;
   return registration;
 }
