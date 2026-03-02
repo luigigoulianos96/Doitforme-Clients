@@ -5,7 +5,8 @@ import { usePreviewData } from './hooks/usePreviewData.js';
 import { usePreviewComputed } from './hooks/usePreviewComputed.js';
 import {
   getClientSlugFromUrl,
-  getPreviewModeFromUrl
+  getPreviewModeFromUrl,
+  getLogoProposalNumberFromUrl
 } from './utils/appHelpers.js';
 import { AppPageLayout } from './components/layout/AppPageLayout.js';
 import { HeroStatsSection } from './components/sections/HeroStatsSection.js';
@@ -19,19 +20,24 @@ import { LogoKitPresentation } from './components/logo/LogoKitPresentation.js';
 function App() {
   const [clientSlug] = useState(getClientSlugFromUrl());
   const [previewMode] = useState(getPreviewModeFromUrl());
+  const [logoProposalNumber] = useState(getLogoProposalNumberFromUrl());
   const { notesHistoryByPost, appendNoteHistory } = useNotesHistory(clientSlug, previewMode);
   const {
     posts,
     logoKit,
+    logoKitIndex,
+    logoKitCount,
     logoAssets,
     logoColors,
     logoStorySteps,
     clientMeta,
     status,
     savingId,
+    supportsLogoFeedbackImages,
+    supportsLogoFeedbackAudio,
     updateReview,
     updateLogoKitReview
-  } = usePreviewData(clientSlug, previewMode);
+  } = usePreviewData(clientSlug, previewMode, logoProposalNumber);
 
   const {
     filteredPosts,
@@ -45,13 +51,15 @@ function App() {
 
   return (
     <AppPageLayout>
-      <HeroStatsSection
-        pageTitle={pageTitle}
-        pageSubtitle={pageSubtitle}
-        approvedCount={approvedCount}
-        disapprovedCount={disapprovedCount}
-        needsReviewCount={needsReviewCount}
-      />
+      {previewMode !== 'logo' && (
+        <HeroStatsSection
+          pageTitle={pageTitle}
+          pageSubtitle={pageSubtitle}
+          approvedCount={approvedCount}
+          disapprovedCount={disapprovedCount}
+          needsReviewCount={needsReviewCount}
+        />
+      )}
 
       <StatusMessagesSection status={status} />
 
@@ -83,10 +91,15 @@ function App() {
         status={status}
         previewMode={previewMode}
         logoKit={logoKit}
+        logoKitIndex={logoKitIndex}
+        logoKitCount={logoKitCount}
+        supportsLogoFeedbackImages={supportsLogoFeedbackImages}
+        supportsLogoFeedbackAudio={supportsLogoFeedbackAudio}
         logoAssets={logoAssets}
         logoColors={logoColors}
         logoStorySteps={logoStorySteps}
         clientMeta={clientMeta}
+        clientSlug={clientSlug}
         savingId={savingId}
         notesHistoryByPost={notesHistoryByPost}
         appendNoteHistory={appendNoteHistory}

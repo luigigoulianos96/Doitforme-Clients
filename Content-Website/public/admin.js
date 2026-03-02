@@ -1302,7 +1302,7 @@ function AdminApp() {
 
   function createPreviewUrl(contentType = 'instagram') {
     if (!selectedClient) return '';
-    return `${window.location.origin}/public/index.html?client=${encodeURIComponent(selectedClient.slug)}&mode=${contentType}`;
+    return `${window.location.origin}/index.html?client=${encodeURIComponent(selectedClient.slug)}&mode=${contentType}`;
   }
 
   function openClientPreviewTab(contentType = activeTab) {

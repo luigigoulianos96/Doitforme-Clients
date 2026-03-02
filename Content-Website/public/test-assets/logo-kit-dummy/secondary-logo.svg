@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="700" viewBox="0 0 1600 700">
+  <rect width="1600" height="700" rx="40" fill="#F7F4EF"/>
+  <circle cx="250" cy="240" r="120" fill="#F7F4EF" stroke="#7A3A22" stroke-width="10"/>
+  <text x="860" y="320" text-anchor="middle" font-family="Arial, sans-serif" font-size="180" font-weight="700" fill="#8E8AD8">Luko pops</text>
+  <text x="860" y="410" text-anchor="middle" font-family="Arial, sans-serif" font-size="52" fill="#7A3A22">Pop into happiness</text>
+</svg>

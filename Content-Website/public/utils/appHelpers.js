@@ -1,3 +1,5 @@
+import { parseLogoStorySections } from './logoPreviewHelpers.js';
+
 const CONTENT_PREFIX = {
   instagram: '[IG]',
   article: '[ARTICLE]',
@@ -15,6 +17,13 @@ function getPreviewModeFromUrl() {
   if (mode === 'article') return 'article';
   if (mode === 'logo') return 'logo';
   return 'instagram';
+}
+
+function getLogoProposalNumberFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const value = Number(params.get('proposal'));
+  if (!Number.isFinite(value) || value < 1) return 1;
+  return Math.floor(value);
 }
 
 function parsePostType(post) {
@@ -99,6 +108,15 @@ function parseLogoAssetCategory(fileName) {
 }
 
 function parseLogoMetaStep(storySteps) {
+  const structuredSections = parseLogoStorySections(storySteps);
+  const structuredMeta = structuredSections.find((section) => section.sectionType === 'meta');
+  if (structuredMeta) {
+    return {
+      type: structuredMeta.type,
+      ...(structuredMeta.data || {})
+    };
+  }
+
   const metaStep = (storySteps || []).find((step) => {
     try {
       const parsed = JSON.parse(`${step?.step_text || ''}`);
@@ -119,6 +137,7 @@ export {
   CONTENT_PREFIX,
   getClientSlugFromUrl,
   getPreviewModeFromUrl,
+  getLogoProposalNumberFromUrl,
   parsePostType,
   stripPostTypePrefix,
   parseInstagramPreviewMeta,

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" rx="48" fill="#F7F4EF"/>
+  <circle cx="820" cy="300" r="150" fill="#F7F4EF" stroke="#7A3A22" stroke-width="10"/>
+  <path d="M925 305c18-20 42-26 68-24" fill="none" stroke="#7A3A22" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="970" cy="250" r="18" fill="#F7A8C7"/>
+  <text x="800" y="690" text-anchor="middle" font-family="Arial, sans-serif" font-size="170" font-weight="700" fill="#8E8AD8">Luko pops</text>
+  <text x="800" y="785" text-anchor="middle" font-family="Arial, sans-serif" font-size="54" fill="#7A3A22">Pop into happiness</text>
+</svg>

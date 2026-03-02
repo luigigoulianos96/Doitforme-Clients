@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F4EBDD"/>
+      <stop offset="1" stop-color="#F1D2C2"/>
+    </linearGradient>
+  </defs>
+  <rect width="1400" height="900" rx="40" fill="url(#g)"/>
+  <rect x="80" y="90" width="360" height="250" rx="24" fill="#FFFFFF" opacity="0.7"/>
+  <rect x="500" y="90" width="360" height="250" rx="24" fill="#8E8AD8" opacity="0.8"/>
+  <rect x="920" y="90" width="400" height="250" rx="24" fill="#F6B4C8" opacity="0.8"/>
+  <rect x="80" y="390" width="560" height="420" rx="28" fill="#FFFFFF" opacity="0.65"/>
+  <rect x="700" y="390" width="620" height="420" rx="28" fill="#FFFFFF" opacity="0.5"/>
+  <text x="110" y="460" font-family="Arial, sans-serif" font-size="54" font-weight="700" fill="#7A3A22">Mood / Reference</text>
+  <text x="110" y="540" font-family="Arial, sans-serif" font-size="34" fill="#7A3A22">Playful geometry</text>
+  <text x="110" y="595" font-family="Arial, sans-serif" font-size="34" fill="#7A3A22">Soft pastel tension</text>
+  <text x="110" y="650" font-family="Arial, sans-serif" font-size="34" fill="#7A3A22">Warm editorial spacing</text>
+</svg>

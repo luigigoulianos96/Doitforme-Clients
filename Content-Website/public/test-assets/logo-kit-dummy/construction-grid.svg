@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900">
+  <rect width="1400" height="900" rx="40" fill="#F8F8F8"/>
+  <g stroke="#D8D8D8" stroke-width="2">
+    <path d="M100 0V900M250 0V900M400 0V900M550 0V900M700 0V900M850 0V900M1000 0V900M1150 0V900M1300 0V900"/>
+    <path d="M0 100H1400M0 250H1400M0 400H1400M0 550H1400M0 700H1400M0 850H1400"/>
+  </g>
+  <circle cx="700" cy="420" r="220" fill="none" stroke="#7A3A22" stroke-width="10"/>
+  <rect x="480" y="200" width="440" height="440" rx="28" fill="none" stroke="#8E8AD8" stroke-width="10"/>
+  <text x="700" y="780" text-anchor="middle" font-family="Arial, sans-serif" font-size="52" fill="#7A3A22">Construction / System Build</text>
+</svg>
