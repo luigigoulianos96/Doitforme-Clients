@@ -572,13 +572,57 @@ function PortalApp() {
               <Card key={feedClient.id}>
                 <h3>{feedClient.name}</h3>
                 <p>Slug: {feedClient.slug}</p>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontSize: '0.95rem' }}>
+                <label
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '999px',
+                    border: '1px solid rgba(148, 163, 184, 0.24)',
+                    background: Boolean(feedClient.english_language) ? 'rgba(34, 197, 94, 0.14)' : 'rgba(255, 255, 255, 0.05)',
+                    color: 'rgba(241, 245, 249, 0.96)',
+                    fontSize: '0.92rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={Boolean(feedClient.english_language)}
                     onChange={(event) => toggleClientEnglish(feedClient, event.target.checked)}
+                    style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
                   />
-                  English language (preview only)
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: 'relative',
+                      width: '2.4rem',
+                      height: '1.4rem',
+                      borderRadius: '999px',
+                      background: Boolean(feedClient.english_language) ? '#22c55e' : 'rgba(148, 163, 184, 0.4)',
+                      boxShadow: Boolean(feedClient.english_language)
+                        ? 'inset 0 0 0 1px rgba(34, 197, 94, 0.35)'
+                        : 'inset 0 0 0 1px rgba(148, 163, 184, 0.2)',
+                      transition: 'all 160ms ease'
+                    }}
+                  >
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '0.16rem',
+                        left: Boolean(feedClient.english_language) ? '1.18rem' : '0.16rem',
+                        width: '1.08rem',
+                        height: '1.08rem',
+                        borderRadius: '50%',
+                        background: '#ffffff',
+                        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.2)',
+                        transition: 'left 160ms ease'
+                      }}
+                    />
+                  </span>
+                  <span>English Preview</span>
                 </label>
                 <p>
                   Αλλαγές προς review: <Badge>{changes}</Badge>
