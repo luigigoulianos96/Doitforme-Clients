@@ -182,3 +182,28 @@ using (
     where p.id = auth.uid() and p.is_admin = true
   )
 );
+
+create table if not exists public.web_push_subscriptions (
+  id bigint generated always as identity primary key,
+  endpoint text not null unique,
+  p256dh_key text not null,
+  auth_key text not null,
+  user_id uuid references auth.users(id) on delete set null,
+  user_agent text not null default '',
+  status text not null default 'active' check (status in ('active', 'inactive')),
+  last_seen_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists web_push_subscriptions_status_idx
+  on public.web_push_subscriptions(status, updated_at desc);
+
+alter table public.web_push_subscriptions enable row level security;
+
+drop policy if exists "No direct public access to push subscriptions" on public.web_push_subscriptions;
+create policy "No direct public access to push subscriptions"
+on public.web_push_subscriptions
+for all
+using (false)
+with check (false);

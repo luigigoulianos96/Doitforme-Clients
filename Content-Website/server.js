@@ -4,6 +4,9 @@ const path = require('path');
 require('./scripts/load-env');
 const { S3Client, DeleteObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const pushVapidPublicKeyHandler = require('./api/push/vapid-public-key.js');
+const pushSubscribeHandler = require('./api/push/subscribe.js');
+const pushNotifyReviewEventHandler = require('./api/push/notify-review-event.js');
 
 const PORT = process.env.PORT || 4180;
 const ROOT_DIR = __dirname;
@@ -11,6 +14,9 @@ const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const JSON_BODY_LIMIT_BYTES = 1024 * 1024;
 const STORAGE_UPLOAD_ROUTE = '/api/storage/presign-upload';
 const STORAGE_DELETE_ROUTE = '/api/storage/delete';
+const PUSH_VAPID_PUBLIC_KEY_ROUTE = '/api/push/vapid-public-key';
+const PUSH_SUBSCRIBE_ROUTE = '/api/push/subscribe';
+const PUSH_NOTIFY_REVIEW_EVENT_ROUTE = '/api/push/notify-review-event';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -204,6 +210,9 @@ const resolve_local_path = (requestPath) => {
     '/app.js': '/public/app.js',
     '/admin.js': '/public/admin.js',
     '/config.js': '/public/config.js',
+    '/service-worker.js': '/public/service-worker.js',
+    '/service-worker-icon.svg': '/public/service-worker-icon.svg',
+    '/sw.js': '/public/sw.js',
     '/index.html': '/public/index.html',
     '/admin.html': '/public/admin.html'
   };
@@ -256,6 +265,21 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (normalizedPath === PUSH_VAPID_PUBLIC_KEY_ROUTE) {
+    await pushVapidPublicKeyHandler(req, res);
+    return;
+  }
+
+  if (normalizedPath === PUSH_SUBSCRIBE_ROUTE) {
+    await pushSubscribeHandler(req, res);
+    return;
+  }
+
+  if (normalizedPath === PUSH_NOTIFY_REVIEW_EVENT_ROUTE) {
+    await pushNotifyReviewEventHandler(req, res);
+    return;
+  }
+
   const filePath = resolve_local_path(url.pathname);
   const isInsideRoot = filePath.startsWith(ROOT_DIR);
 
@@ -275,4 +299,5 @@ server.listen(PORT, () => {
   console.log(`Admin page: http://localhost:${PORT}/public/admin.html`);
   console.log(`Storage upload endpoint: http://localhost:${PORT}${STORAGE_UPLOAD_ROUTE}`);
   console.log(`Storage delete endpoint: http://localhost:${PORT}${STORAGE_DELETE_ROUTE}`);
+  console.log(`Push subscribe endpoint: http://localhost:${PORT}${PUSH_SUBSCRIBE_ROUTE}`);
 });

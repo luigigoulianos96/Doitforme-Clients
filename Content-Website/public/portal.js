@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import styled, { createGlobalStyle } from 'styled-components';
 import { deleteFile as deleteStorageFile } from './services/storageService.js';
+import { enableReviewPushNotifications, isReviewPushSupported, syncReviewPushSubscription } from './services/webPushService.js';
 
 const AppStyle = createGlobalStyle`
   :root {
@@ -206,6 +207,7 @@ function PortalApp() {
   const [status, setStatus] = useState('');
   const [configError, setConfigError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [webPushActive, setWebPushActive] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [clients, setClients] = useState([]);
@@ -267,25 +269,35 @@ function PortalApp() {
     return () => window.clearInterval(timer);
   }, [client, session]);
 
+  useEffect(() => {
+    if (!session) {
+      setWebPushActive(false);
+      return;
+    }
+
+    setWebPushActive(false);
+    syncReviewPushSubscription(session.user?.id || '').then(({ subscription }) => {
+      if (subscription) {
+        setWebPushActive(true);
+      }
+    });
+  }, [session]);
+
   async function enableDesktopNotifications() {
-    const hasSupport = typeof window !== 'undefined' && 'Notification' in window;
-    if (!hasSupport) {
-      setStatus('Ο browser δεν υποστηρίζει desktop notifications.');
+    if (!isReviewPushSupported()) {
+      setStatus('Ο browser δεν υποστηρίζει web push notifications.');
       return;
     }
 
-    if (window.Notification.permission === 'granted') {
-      setStatus('Οι desktop ειδοποιήσεις είναι ήδη ενεργές.');
-      return;
+    try {
+      const { alreadyActive } = await enableReviewPushNotifications(session?.user?.id || '');
+      setWebPushActive(true);
+      setStatus(alreadyActive
+        ? 'Οι web push ειδοποιήσεις είναι ήδη ενεργές.'
+        : 'Οι web push ειδοποιήσεις ενεργοποιήθηκαν.');
+    } catch (error) {
+      setStatus(error.message || 'Οι web push ειδοποιήσεις δεν ενεργοποιήθηκαν.');
     }
-
-    const permission = await window.Notification.requestPermission();
-    if (permission === 'granted') {
-      setStatus('Οι desktop ειδοποιήσεις ενεργοποιήθηκαν.');
-      return;
-    }
-
-    setStatus('Οι desktop ειδοποιήσεις δεν επιτράπηκαν.');
   }
 
   async function handleSignIn(event) {
@@ -428,7 +440,7 @@ function PortalApp() {
     }
 
     const hasSupport = typeof window !== 'undefined' && 'Notification' in window;
-    const canNotify = hasSupport && window.Notification.permission === 'granted';
+    const canNotify = hasSupport && window.Notification.permission === 'granted' && !webPushActive;
 
     if (canNotify) {
       clients.forEach((feedClient) => {
@@ -448,7 +460,7 @@ function PortalApp() {
     }
 
     previousChangesByClientRef.current = nextMap;
-  }, [session, clients, changesByClient]);
+  }, [session, clients, changesByClient, webPushActive]);
 
   if (configError) {
     return (

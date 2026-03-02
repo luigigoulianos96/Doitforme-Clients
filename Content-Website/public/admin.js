@@ -838,6 +838,13 @@ function getClientSlugFromUrl() {
   return params.get('client') || '';
 }
 
+function getInitialAdminTabFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const requestedTab = params.get('tab');
+  if (requestedTab === 'article' || requestedTab === 'logo') return requestedTab;
+  return 'instagram';
+}
+
 function slugFilename(name) {
   return name.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
 }
@@ -1107,7 +1114,7 @@ function AdminApp() {
   const [captionDrafts, setCaptionDrafts] = useState({});
   const [replacementFiles, setReplacementFiles] = useState({});
   const [replacementPreviews, setReplacementPreviews] = useState({});
-  const [activeTab, setActiveTab] = useState('instagram');
+  const [activeTab, setActiveTab] = useState(getInitialAdminTabFromUrl);
   const [expandedPostId, setExpandedPostId] = useState('');
 
   useEffect(() => {

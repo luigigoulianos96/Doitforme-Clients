@@ -7,6 +7,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.883.0",
     "@aws-sdk/s3-request-presigner": "^3.883.0",
-    "monica-alexandria": "^4.5.15"
+    "monica-alexandria": "^4.5.15",
+    "web-push": "^3.6.7"
   }
 }

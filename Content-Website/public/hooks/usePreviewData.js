@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createSupabaseClient } from '../services/supabaseClient.js';
 import { deleteFile, getPublicUrl, uploadFile } from '../services/storageService.js';
+import { notifyReviewEvent } from '../services/reviewPushService.js';
 
 function sanitizePathSegment(value, fallback) {
   const cleaned = `${value || ''}`
@@ -381,6 +382,21 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
 
     setStatus((prev) => ({ ...prev, message: successMessage }));
     setSavingId(null);
+
+    await notifyReviewEvent({
+      clientSlug,
+      clientName: clientMeta?.name || '',
+      contentType: previewMode,
+      approvalStatus: rows[0]?.approval_status || nextChanges.approval_status || '',
+      hasClientNotes: rows.some((row) => `${row?.client_notes || ''}`.trim().length > 0),
+      hasFeedbackAttachment: rows.some((row) =>
+        Boolean(
+          (row?.client_feedback_image_url || row?.client_feedback_image_path || row?.client_feedback_audio_url || row?.client_feedback_audio_path)
+        )
+      ),
+      targetIds
+    });
+
     return true;
   }
 
@@ -536,6 +552,22 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
 
     setStatus((prev) => ({ ...prev, message: successMessage }));
     setSavingId(null);
+
+    await notifyReviewEvent({
+      clientSlug,
+      clientName: clientMeta?.name || '',
+      contentType: 'logo',
+      approvalStatus: data.approval_status || nextChanges.approval_status || '',
+      hasClientNotes: `${data.client_notes || ''}`.trim().length > 0,
+      hasFeedbackAttachment: Boolean(
+        uploadedFeedbackImagePath
+        || uploadedFeedbackAudioPath
+        || logoKit.client_feedback_image_path
+        || (options.feedbackAudioRemoved ? '' : logoKit.client_feedback_audio_path)
+      ),
+      logoKitId: logoKit.id
+    });
+
     return true;
   }
 
