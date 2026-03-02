@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Textarea_ } from 'monica-alexandria';
+import { getPreviewText } from '../../utils/previewText.js';
 import {
   ReviewSection,
   ReviewBox,
@@ -33,8 +34,10 @@ function LogoReviewPanel({
   supportsFeedbackAudio,
   historyEntries,
   onAppendHistory,
-  onUpdateLogoKitReview
+  onUpdateLogoKitReview,
+  copy = null
 }) {
+  const t = copy || getPreviewText(false);
   const [notes, setNotes] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true);
@@ -121,7 +124,7 @@ function LogoReviewPanel({
 
     if (!isSupportedFeedbackImage(nextFile)) {
       setDraftAttachmentFile(null);
-      setAttachmentError('Επέλεξε εικόνα JPG, JPEG, PNG ή WEBP.');
+      setAttachmentError(t.selectImageError);
       return;
     }
 
@@ -146,7 +149,7 @@ function LogoReviewPanel({
 
     const mediaDevices = window.navigator && window.navigator.mediaDevices;
     if (!window.MediaRecorder || !mediaDevices || !mediaDevices.getUserMedia) {
-      setAudioError('Η εγγραφή ήχου δεν υποστηρίζεται σε αυτόν τον browser.');
+      setAudioError(t.audioUnsupportedError);
       return;
     }
 
@@ -175,7 +178,7 @@ function LogoReviewPanel({
         stopAudioStream();
 
         if (!audioBlob.size) {
-          setAudioError('Δεν καταγράφηκε ήχος.');
+          setAudioError(t.audioEmptyError);
           return;
         }
 
@@ -183,7 +186,7 @@ function LogoReviewPanel({
       };
 
       recorder.onerror = () => {
-        setAudioError('Η εγγραφή ήχου απέτυχε.');
+        setAudioError(t.audioFailedError);
         audioRecorderRef.current = null;
         setIsRecordingAudio(false);
         stopAudioStream();
@@ -192,7 +195,7 @@ function LogoReviewPanel({
       recorder.start();
       setIsRecordingAudio(true);
     } catch {
-      setAudioError('Δεν δόθηκε πρόσβαση στο μικρόφωνο.');
+      setAudioError(t.microphoneDeniedError);
       stopAudioStream();
     }
   }
@@ -201,11 +204,11 @@ function LogoReviewPanel({
     if (!draftAudioFile) return;
     const ok = await onUpdateLogoKitReview(
       {},
-      'Το ηχητικό ανέβηκε.',
+      t.audioUploaded,
       { feedbackAudioFile: draftAudioFile }
     );
     if (!ok) return;
-    onAppendHistory(logoKit.id, draftAudioFile.name, 'Αποστολή ηχητικού μηνύματος');
+    onAppendHistory(logoKit.id, draftAudioFile.name, t.sendAudioAction);
     clearDraftAudio();
     setHideStoredAudio(true);
   }
@@ -295,7 +298,7 @@ function LogoReviewPanel({
               'label',
               {
                 htmlFor: `logo-feedback-attachment-${logoKit.id}`,
-                title: hasStoredImage || draftAttachmentFile ? 'Screenshot έτοιμο' : 'Προσθήκη screenshot',
+                title: hasStoredImage || draftAttachmentFile ? t.screenshotReady : t.addScreenshot,
                 style: {
                   ...getIconButtonStyle(Boolean(draftAttachmentFile || hasStoredImage)),
                   cursor: pending ? 'default' : 'pointer'
@@ -311,7 +314,7 @@ function LogoReviewPanel({
                 type: 'button',
                 onClick: handleAudioRecorderToggle,
                 disabled: pending,
-                title: isRecordingAudio ? 'Σταμάτημα εγγραφής' : draftAudioFile ? 'Νέα εγγραφή' : hasStoredAudio ? 'Νέα εγγραφή ηχητικού' : 'Έναρξη εγγραφής',
+                title: isRecordingAudio ? t.stopRecording : draftAudioFile ? t.newRecording : hasStoredAudio ? t.newAudioRecording : t.startRecording,
                 style: getIconButtonStyle(Boolean(isRecordingAudio || draftAudioFile || hasStoredAudio))
               },
               renderMicIcon()
@@ -326,10 +329,10 @@ function LogoReviewPanel({
     if (!trimmedNotes) return;
     const ok = await onUpdateLogoKitReview(
       { client_notes: trimmedNotes, approval_status: 'pending' },
-      'Το σχόλιο αποθηκεύτηκε και στάλθηκε στον admin.'
+      t.notesSaved
     );
     if (!ok) return;
-    onAppendHistory(logoKit.id, trimmedNotes, 'Σημείωση logo kit');
+    onAppendHistory(logoKit.id, trimmedNotes, t.noteAction);
     setNotes('');
     setNotesOpen(false);
   }
@@ -341,20 +344,20 @@ function LogoReviewPanel({
       approval_status: nextStatus,
       client_notes: trimmedNotes || existingClientNotes
     };
-    const successLabel = nextStatus === 'approved' ? 'Το logo kit εγκρίθηκε.' : 'Το logo kit απορρίφθηκε.';
+    const successLabel = nextStatus === 'approved' ? t.logoKitApproved : t.logoKitRejected;
     const ok = await onUpdateLogoKitReview(payload, successLabel, {
       feedbackImageFile: draftAttachmentFile
     });
     if (!ok) return;
     if (draftAttachmentFile) {
-      onAppendHistory(logoKit.id, draftAttachmentFile.name, 'Συνημμένο screenshot');
+      onAppendHistory(logoKit.id, draftAttachmentFile.name, t.attachmentScreenshot);
       setDraftAttachmentFile(null);
       setAttachmentError('');
     }
-    onAppendHistory(logoKit.id, trimmedNotes || 'Χωρίς σημείωση.', nextStatus === 'approved' ? 'Έγκριση' : 'Απόρριψη');
+    onAppendHistory(logoKit.id, trimmedNotes || t.noNote, nextStatus === 'approved' ? t.approvalAction : t.rejectionAction);
     setNotes('');
     setDecisionLocked(true);
-    setDecisionNotice(nextStatus === 'approved' ? 'Εγκρίνατε το logo kit.' : 'Απορρίψατε το logo kit.');
+    setDecisionNotice(nextStatus === 'approved' ? t.logoKitApprovedNotice : t.logoKitRejectedNotice);
   }
 
   return h(
@@ -366,11 +369,11 @@ function LogoReviewPanel({
       h(
         ReviewHead,
         null,
-        h('span', null, 'Σημειώσεις πελάτη'),
+        h('span', null, t.clientNotes),
         h(
           InlineAction,
           { type: 'button', onClick: () => setShowHistory((prev) => !prev), disabled: (historyEntries || []).length === 0 },
-          'Ιστορικό σημειώσεων'
+          t.notesHistory
         )
       ),
       showHistory && (historyEntries || []).length > 0
@@ -396,7 +399,7 @@ function LogoReviewPanel({
               rows: '3',
               value: notes,
               onChange: (event) => setNotes(event.target.value),
-              placeholder: 'Γράψε σχόλιο για αυτό το logo kit...'
+              placeholder: t.logoNotePlaceholder
             }),
             h(
               SaveRow,
@@ -405,7 +408,7 @@ function LogoReviewPanel({
               h(
                 SaveNoteButton,
                 { type: 'button', onClick: handleSaveNotes, disabled: pending || !notes.trim() },
-                '⌾ Αποθήκευση'
+                t.save
               )
             ),
             attachmentError
@@ -430,7 +433,7 @@ function LogoReviewPanel({
                       disabled: pending || isRecordingAudio,
                       style: getMiniActionStyle('confirm')
                     },
-                    'Αποστολή'
+                    t.upload
                   ),
                   h(
                     'button',
@@ -440,7 +443,7 @@ function LogoReviewPanel({
                       disabled: pending || isRecordingAudio,
                       style: getMiniActionStyle('danger')
                     },
-                    'Αφαίρεση'
+                    t.remove
                   )
                 )
               : null,
@@ -454,7 +457,7 @@ function LogoReviewPanel({
             h(
               NoteCollapsed,
               { type: 'button', onClick: () => setNotesOpen(true) },
-              '+ Προσθήκη νέας σημείωσης'
+              t.addNewNote
             )
           ),
       h(
@@ -464,21 +467,21 @@ function LogoReviewPanel({
           ? h(
               DecisionButton,
               { type: 'button', $type: 'approve', onClick: () => handleDecision('approved'), disabled: pending },
-              '✓ Έγκριση'
+              t.approve
             )
           : null,
         !decisionLocked
           ? h(
               DecisionButton,
               { type: 'button', $type: 'decline', onClick: () => handleDecision('disapproved'), disabled: pending },
-              '✕ Απόρριψη'
+              t.reject
             )
           : null,
         decisionLocked
           ? h(
               DecisionButton,
               { type: 'button', onClick: () => setDecisionLocked(false), disabled: pending },
-              'Αλλαγή Απόφασης'
+              t.changeDecision
             )
           : null
       ),

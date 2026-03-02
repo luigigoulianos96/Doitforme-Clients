@@ -12,6 +12,13 @@ import useLogoKitAdmin from './admin/hooks/useLogoKitAdmin.js';
 import InstagramPostCardUX from './admin/components/InstagramPostCardUX.js';
 import ActionMenu from './admin/components/ActionMenu.js';
 import CollapsiblePanel from './admin/components/CollapsiblePanel.js';
+import {
+  CONTENT_TABS,
+  CONTENT_PREFIX,
+  parsePostType,
+  stripPostTypePrefix,
+  parseSocialPreviewMeta
+} from './utils/appHelpers.js';
 
 const AppStyle = createGlobalStyle`
   :root {
@@ -841,12 +848,25 @@ function getClientSlugFromUrl() {
 function getInitialAdminTabFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const requestedTab = params.get('tab');
-  if (requestedTab === 'article' || requestedTab === 'logo') return requestedTab;
+  if (requestedTab && CONTENT_TABS[requestedTab]) return requestedTab;
   return 'instagram';
 }
 
 function slugFilename(name) {
-  return name.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
+  const rawValue = `${name || ''}`.trim();
+  if (!rawValue) return 'file';
+
+  const extensionMatch = rawValue.match(/(\.[^.]+)$/);
+  const extension = (extensionMatch?.[1] || '').replace(/[^a-zA-Z0-9.]/g, '').toLowerCase();
+  const baseName = extension ? rawValue.slice(0, -extension.length) : rawValue;
+  const sanitizedBase = baseName
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9_-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+
+  return `${sanitizedBase || 'file'}${extension}`;
 }
 
 function formatDate(iso) {
@@ -908,59 +928,40 @@ function queryClientPosts(client, clientId, selectClause) {
     .order('created_at', { ascending: false });
 }
 
-const CONTENT_TABS = {
-  instagram: 'FB & IG',
-  article: 'Άρθρα',
-  logo: 'Logo Kit'
-};
-
-const CONTENT_PREFIX = {
-  instagram: '[IG]',
-  article: '[ARTICLE]',
-  logo: '[LOGO]'
-};
-
-function parsePostType(post) {
-  const value = `${post?.title || ''}`.trim();
-  if (value.startsWith(CONTENT_PREFIX.article)) return 'article';
-  if (value.startsWith(CONTENT_PREFIX.logo)) return 'logo';
-  return 'instagram';
-}
-
-function stripPostTypePrefix(title) {
-  const value = `${title || ''}`.trim();
-  return value
-    .replace(CONTENT_PREFIX.instagram, '')
-    .replace(CONTENT_PREFIX.article, '')
-    .replace(CONTENT_PREFIX.logo, '')
-    .trim();
-}
-
 function makeTypedTitle(type, rawTitle) {
   const cleanTitle = `${rawTitle || ''}`.trim();
   const prefix = CONTENT_PREFIX[type] || CONTENT_PREFIX.instagram;
   return `${prefix} ${cleanTitle}`;
 }
 
+function buildReplacementTitle(post, replacementFileName, metaOverride = null) {
+  const contentType = parsePostType(post);
+  if (contentType !== 'instagram' && contentType !== 'linkedin') {
+    return makeTypedTitle(contentType, replacementFileName);
+  }
+
+  const meta = metaOverride || instagramEntryMeta(post);
+  if (meta.kind === 'story') {
+    return makeTypedTitle(contentType, `STORY::${replacementFileName}`);
+  }
+  if (meta.kind === 'grid') {
+    return makeTypedTitle(contentType, `GRID9::${replacementFileName}`);
+  }
+  if (meta.kind === 'carousel') {
+    const groupId = meta.groupId || post.id;
+    const slideOrder = Number(meta.slideOrder) || 1;
+    return makeTypedTitle(contentType, `CAROUSEL::${groupId}::${slideOrder}::${replacementFileName}`);
+  }
+  return makeTypedTitle(contentType, `SINGLE::${replacementFileName}`);
+}
+
 function instagramEntryMeta(post) {
-  const value = stripPostTypePrefix(post?.title || '');
-  if (value.startsWith('STORY::')) {
-    return { kind: 'story', groupId: '', slideOrder: 0, fileName: value.replace('STORY::', '').trim() };
-  }
-  if (value.startsWith('GRID9::')) {
-    return { kind: 'grid', groupId: '', slideOrder: 0, fileName: value.replace('GRID9::', '').trim() };
-  }
-  if (value.startsWith('CAROUSEL::')) {
-    const parts = value.split('::');
-    const groupId = `${parts[1] || ''}`.trim();
-    const slideOrder = Number(parts[2] || 0);
-    const fileName = `${parts.slice(3).join('::') || ''}`.trim();
-    return { kind: 'carousel', groupId, slideOrder, fileName };
-  }
-  if (value.startsWith('SINGLE::')) {
-    return { kind: 'single', groupId: '', slideOrder: 1, fileName: value.replace('SINGLE::', '').trim() };
-  }
-  return { kind: 'single', groupId: '', slideOrder: 1, fileName: value };
+  const meta = parseSocialPreviewMeta(post);
+  return {
+    ...meta,
+    kind: meta.kind === 'grid9' ? 'grid' : meta.kind,
+    slideOrder: meta.kind === 'single' && !meta.slideOrder ? 1 : meta.slideOrder
+  };
 }
 
 function isExistingFeedOrderEntry(item) {
@@ -1155,6 +1156,36 @@ function AdminApp() {
   }, [replacementPreviews]);
 
   const instagram = useAdminInstagramComposer({
+    contentType: 'instagram',
+    contentLabel: 'Instagram',
+    allowStories: true,
+    allowGrid: true,
+    client,
+    session,
+    selectedClient,
+    posts,
+    setBusy,
+    setStatus,
+    loadPosts,
+    validateSelectedClientScope,
+    createStorageAdapter,
+    createMediaItems,
+    slugFilename,
+    makeTypedTitle,
+    parseCaptions,
+    parsePostType,
+    instagramEntryMeta,
+    stripPostTypePrefix,
+    isVideoPost,
+    isExistingFeedOrderEntry,
+    isInstagramGridFile
+  });
+
+  const linkedin = useAdminInstagramComposer({
+    contentType: 'linkedin',
+    contentLabel: 'LinkedIn',
+    allowStories: false,
+    allowGrid: false,
     client,
     session,
     selectedClient,
@@ -1345,7 +1376,7 @@ function AdminApp() {
     setStatus(`Επιλέχθηκε νέο αρχείο για το "${stripPostTypePrefix(post.title)}". Πάτησε αποθήκευση αλλαγών.`);
   }
 
-  async function savePostEdits(post) {
+  async function savePostEdits(post, socialMeta = null) {
     if (!client || !session) return;
     setBusy(true);
     setStatus(`Αποθήκευση αλλαγών για "${stripPostTypePrefix(post.title)}"...`);
@@ -1371,7 +1402,7 @@ function AdminApp() {
       const { data: publicData } = storage.getPublicUrl(nextPath);
       nextImageUrl = publicData.publicUrl;
       nextImagePath = nextPath;
-      nextTitle = makeTypedTitle(parsePostType(post), selectedFile.name);
+      nextTitle = buildReplacementTitle(post, selectedFile.name, socialMeta);
     }
 
     const { error: updateError } = await client
@@ -1544,6 +1575,8 @@ function AdminApp() {
   );
   const hasPublishedPosts = scopedReviewItems.length > 0;
   const hasClientSlug = clientSlug.length > 0;
+  const isSocialTab = activeTab === 'instagram' || activeTab === 'linkedin';
+  const activeSocialComposer = activeTab === 'linkedin' ? linkedin : instagram;
 
   if (configError) {
     return (
@@ -1607,7 +1640,7 @@ function AdminApp() {
             <ActionButton type="button" onClick={handleSignOut}>Αποσύνδεση</ActionButton>
           </HeroTop>
           <Title>Ανέβασμα Περιεχομένου: {selectedClient?.name || 'Client'}</Title>
-          <Subtitle>Instagram, Άρθρα και Logo Kit για τον ίδιο client, με ξεχωριστό preview link ανά tab.</Subtitle>
+          <Subtitle>FB & IG, LinkedIn, Άρθρα και Logo Kit για τον ίδιο client, με ξεχωριστό preview link ανά tab.</Subtitle>
           <TabRow>
             {Object.keys(CONTENT_TABS).map((tabKey) => (
               <TabButton key={tabKey} type="button" $active={activeTab === tabKey} onClick={() => setActiveTab(tabKey)}>
@@ -1616,10 +1649,12 @@ function AdminApp() {
             ))}
           </TabRow>
 
-          {activeTab === 'instagram' && (
+          {isSocialTab && (
             <InstagramFeedAdmin
               busy={busy}
-              {...instagram}
+              platformName={activeTab === 'linkedin' ? 'LinkedIn' : 'Instagram'}
+              showStoriesTools={activeTab === 'instagram'}
+              {...activeSocialComposer}
             />
           )}
 
@@ -1679,16 +1714,16 @@ function AdminApp() {
 
           <WorkflowActionGroup>
             <WorkflowActionMeta>
-              {activeTab === 'instagram'
+              {isSocialTab
                 ? 'Τελικές ενέργειες για preview και άμεσο share του τρέχοντος tab.'
                 : 'Τελικές ενέργειες για preview και share του τρέχοντος tab.'}
             </WorkflowActionMeta>
             <WorkflowActionRow>
               <ActionButton type="button" disabled={!hasPublishedPosts} onClick={() => openClientPreviewTab(activeTab)}>
-                {activeTab === 'instagram' ? 'Προεπισκόπηση' : 'Preview'}
+                {isSocialTab ? 'Προεπισκόπηση' : 'Preview'}
               </ActionButton>
               <ActionButton type="button" disabled={!hasPublishedPosts} onClick={() => copyClientShareLink(activeTab)}>
-                {activeTab === 'instagram' ? '⧉ Αντιγραφή συνδέσμου' : 'Link'}
+                {isSocialTab ? '⧉ Αντιγραφή συνδέσμου' : 'Link'}
               </ActionButton>
             </WorkflowActionRow>
           </WorkflowActionGroup>
@@ -1700,9 +1735,9 @@ function AdminApp() {
 
         <List>
           <ListHeader>
-            <ListTitle>{activeTab === 'instagram' ? 'Όλο το περιεχόμενο' : `${CONTENT_TABS[activeTab]}: Όλα τα στοιχεία`}</ListTitle>
+            <ListTitle>{isSocialTab ? `${CONTENT_TABS[activeTab]}: Όλο το περιεχόμενο` : `${CONTENT_TABS[activeTab]}: Όλα τα στοιχεία`}</ListTitle>
             <ActionButton type="button" $type="danger" onClick={deleteAllPostsPermanently} disabled={busy || scopedReviewItems.length === 0}>
-              {activeTab === 'instagram' ? 'Οριστική διαγραφή' : 'Διαγραφή'}
+              {isSocialTab ? 'Οριστική διαγραφή' : 'Διαγραφή'}
             </ActionButton>
           </ListHeader>
 
@@ -1763,13 +1798,13 @@ function AdminApp() {
           ) : (
             <PostsGrid>
             {scopedPosts.map((post) => {
-              const instagramMeta = activeTab === 'instagram' ? instagramEntryMeta(post) : null;
+              const instagramMeta = isSocialTab ? instagramEntryMeta(post) : null;
               const isInstagramStory = instagramMeta?.kind === 'story';
               const isExpanded = expandedPostId === post.id;
               const feedbackImageUrl = resolveFeedbackAttachmentUrl(post.client_feedback_image_url, post.client_feedback_image_path);
               const feedbackAudioUrl = resolveFeedbackAttachmentUrl(post.client_feedback_audio_url, post.client_feedback_audio_path);
               const hasFeedbackAttachment = Boolean(feedbackImageUrl || feedbackAudioUrl);
-              if (activeTab === 'instagram') {
+              if (isSocialTab) {
                 const mediaPreview = replacementFiles[post.id] && isVideoFile(replacementFiles[post.id]) ? (
                   <video
                     src={replacementPreviews[post.id]}
@@ -1823,7 +1858,7 @@ function AdminApp() {
                       captionValue={captionDrafts[post.id] ?? post.caption}
                       onCaptionChange={(value) => handleCaptionDraft(post.id, value)}
                       onReplaceMedia={(file) => handleReplacementSelect(post, file)}
-                      onSaveEdits={() => savePostEdits(post)}
+                      onSaveEdits={() => savePostEdits(post, instagramMeta)}
                       onDelete={() => deletePostPermanently(post)}
                       clientNotes={post.client_notes}
                       clientFeedbackImageUrl={feedbackImageUrl}
@@ -1859,7 +1894,7 @@ function AdminApp() {
                         )}
                       </RowThumb>
                       <RowHeadText>
-                        <strong>{activeTab === 'logo' ? logoEntryLabel(post) : (activeTab === 'instagram' ? (instagramMeta?.fileName || stripPostTypePrefix(post.title)) : stripPostTypePrefix(post.title))}</strong>
+                        <strong>{activeTab === 'logo' ? logoEntryLabel(post) : (isSocialTab ? (instagramMeta?.fileName || stripPostTypePrefix(post.title)) : stripPostTypePrefix(post.title))}</strong>
                         <MutedSmall>{formatDate(post.created_at)}</MutedSmall>
                         <RowSummaryHint>{isExpanded ? 'Πάτησε για απόκρυψη λεπτομερειών' : 'Πάτησε για προβολή λεπτομερειών'}</RowSummaryHint>
                       </RowHeadText>

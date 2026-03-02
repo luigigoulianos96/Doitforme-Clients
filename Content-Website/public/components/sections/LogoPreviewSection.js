@@ -17,7 +17,8 @@ function LogoPreviewSection({
   notesHistoryByPost,
   appendNoteHistory,
   updateLogoKitReview,
-  LogoKitPresentation
+  LogoKitPresentation,
+  copy
 }) {
   return React.createElement(
     React.Fragment,
@@ -37,7 +38,8 @@ function LogoPreviewSection({
           pending: savingId === `logo-${logoKit?.id}`,
           historyEntries: notesHistoryByPost[logoKit?.id] || [],
           onAppendHistory: appendNoteHistory,
-          onUpdateLogoKitReview: updateLogoKitReview
+          onUpdateLogoKitReview: updateLogoKitReview,
+          copy
         })
       : null
   );

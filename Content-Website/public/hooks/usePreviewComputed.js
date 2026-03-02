@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { parsePostType, parseInstagramPreviewMeta } from '../utils/appHelpers.js';
 
 function usePreviewComputed(posts, previewMode, logoKit, clientMeta) {
+  const isSocialPreview = previewMode === 'instagram' || previewMode === 'linkedin';
+  const isEnglish = Boolean(clientMeta?.english_language);
   const filteredPosts = useMemo(
     () => posts.filter((post) => parsePostType(post) === previewMode),
     [posts, previewMode]
@@ -12,10 +14,12 @@ function usePreviewComputed(posts, previewMode, logoKit, clientMeta) {
       feedItems: [],
       storyItems: [],
       gridPost: null,
-      gridCaption: 'Έτσι θα διαμορφωθεί το Instagram feed σας μετά τη δημοσίευση όλων των posts.'
+      gridCaption: isEnglish
+        ? 'This is how your Instagram feed will look after all posts are published.'
+        : 'Έτσι θα διαμορφωθεί το Instagram feed σας μετά τη δημοσίευση όλων των posts.'
     };
 
-    if (previewMode !== 'instagram') return defaultValue;
+    if (!isSocialPreview) return defaultValue;
 
     const carouselGroups = {};
     const singlePosts = [];
@@ -26,11 +30,13 @@ function usePreviewComputed(posts, previewMode, logoKit, clientMeta) {
       const meta = parseInstagramPreviewMeta(post);
 
       if (meta.kind === 'story') {
+        if (previewMode !== 'instagram') return;
         storyPosts.push({ post, meta });
         return;
       }
 
       if (meta.kind === 'grid9') {
+        if (previewMode !== 'instagram') return;
         gridPosts.push({ post, meta });
         return;
       }
@@ -122,7 +128,7 @@ function usePreviewComputed(posts, previewMode, logoKit, clientMeta) {
       gridPost,
       gridCaption
     };
-  }, [filteredPosts, previewMode]);
+  }, [filteredPosts, previewMode, isSocialPreview, isEnglish]);
 
   const approvedCount = useMemo(
     () => (previewMode === 'logo'
@@ -146,16 +152,32 @@ function usePreviewComputed(posts, previewMode, logoKit, clientMeta) {
   );
 
   const pageTitle = previewMode === 'article'
-    ? `${clientMeta?.name ? `${clientMeta.name} Ροή Εγκρίσεων Άρθρων` : 'Ροή Εγκρίσεων Άρθρων'}`
+    ? (isEnglish
+      ? `${clientMeta?.name ? `${clientMeta.name} Article Review Flow` : 'Article Review Flow'}`
+      : `${clientMeta?.name ? `${clientMeta.name} Ροή Εγκρίσεων Άρθρων` : 'Ροή Εγκρίσεων Άρθρων'}`)
     : previewMode === 'logo'
       ? `${clientMeta?.name ? `${clientMeta.name} Logo Kit` : 'Logo Kit'}`
-      : `${clientMeta?.name ? `${clientMeta.name} Ροή Εγκρίσεων` : 'Ροή Εγκρίσεων'}`;
+      : previewMode === 'linkedin'
+        ? `${clientMeta?.name ? `${clientMeta.name} LinkedIn Review` : 'LinkedIn Review'}`
+      : (isEnglish
+        ? `${clientMeta?.name ? `${clientMeta.name} Review Flow` : 'Review Flow'}`
+        : `${clientMeta?.name ? `${clientMeta.name} Ροή Εγκρίσεων` : 'Ροή Εγκρίσεων'}`);
 
   const pageSubtitle = previewMode === 'article'
-    ? 'WordPress-style preview: ο πελάτης κάνει edit, αποθηκεύει αλλαγές και δίνει έγκριση ή απόρριψη.'
+    ? (isEnglish
+      ? 'WordPress-style preview: the client edits, saves changes, and approves or rejects.'
+      : 'WordPress-style preview: ο πελάτης κάνει edit, αποθηκεύει αλλαγές και δίνει έγκριση ή απόρριψη.')
     : previewMode === 'logo'
-      ? 'Animated logo presentation με δομημένα slides, σχόλια πελάτη και έγκριση ή απόρριψη.'
-      : 'Αυτή η σελίδα προορίζεται μόνο για τον πελάτη. Χρησιμοποιείται για σημειώσεις και εγκρίσεις αναρτήσεων.';
+      ? (isEnglish
+        ? 'Animated logo presentation with structured slides, client notes, and approval or rejection.'
+        : 'Animated logo presentation με δομημένα slides, σχόλια πελάτη και έγκριση ή απόρριψη.')
+      : previewMode === 'linkedin'
+        ? (isEnglish
+          ? 'LinkedIn-style preview for client notes, approvals, and social review in the same workflow.'
+          : 'LinkedIn-style preview για client notes, approvals και social review στο ίδιο workflow.')
+      : (isEnglish
+        ? 'This page is intended only for the client. It is used for notes and post approvals.'
+        : 'Αυτή η σελίδα προορίζεται μόνο για τον πελάτη. Χρησιμοποιείται για σημειώσεις και εγκρίσεις αναρτήσεων.');
 
   return {
     filteredPosts,

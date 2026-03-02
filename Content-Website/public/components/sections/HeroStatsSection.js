@@ -16,7 +16,8 @@ function HeroStatsSection({
   pageSubtitle,
   approvedCount,
   disapprovedCount,
-  needsReviewCount
+  needsReviewCount,
+  copy
 }) {
   return React.createElement(
     Hero,
@@ -31,19 +32,19 @@ function HeroStatsSection({
       React.createElement(
         StatCard,
         null,
-        React.createElement(StatLabel, null, 'Εγκεκριμένα'),
+        React.createElement(StatLabel, null, copy.statsApproved),
         React.createElement(StatValue, null, approvedCount)
       ),
       React.createElement(
         StatCard,
         null,
-        React.createElement(StatLabel, null, 'Απορριφθέντα'),
+        React.createElement(StatLabel, null, copy.statsRejected),
         React.createElement(StatValue, null, disapprovedCount)
       ),
       React.createElement(
         StatCard,
         null,
-        React.createElement(StatLabel, null, 'Χρειάζονται έλεγχο'),
+        React.createElement(StatLabel, null, copy.statsNeedsReview),
         React.createElement(StatValue, null, needsReviewCount)
       )
     )

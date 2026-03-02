@@ -18,8 +18,11 @@ function InstagramPreviewSection({
   updateReview,
   notesHistoryByPost,
   appendNoteHistory,
-  PostCard
+  PostCard,
+  copy
 }) {
+  const isSocialPreview = previewMode === 'instagram' || previewMode === 'linkedin';
+  const isLinkedInPreview = previewMode === 'linkedin';
   const storyItems = instagramPreview?.storyItems || [];
   const [selectedStoryIndex, setSelectedStoryIndex] = React.useState(0);
   const [viewerStoryIndex, setViewerStoryIndex] = React.useState(-1);
@@ -100,7 +103,7 @@ function InstagramPreviewSection({
     return () => window.clearInterval(timer);
   }, [isViewerOpen, viewerStoryIndex, storyItems.length]);
 
-  if (status.loading || status.error || previewMode !== 'instagram') {
+  if (status.loading || status.error || !isSocialPreview) {
     return React.createElement(React.Fragment, null);
   }
 
@@ -177,12 +180,14 @@ function InstagramPreviewSection({
     null,
     React.createElement(
       Feed,
-      { $mode: 'instagram' },
+      { $mode: previewMode },
       instagramPreview.feedItems.length === 0
         ? React.createElement(
             State,
             null,
-            'Δεν υπάρχουν δημοσιευμένα Instagram posts ακόμα. Μπες στη Διαχείριση για ανέβασμα.'
+            isLinkedInPreview
+              ? copy.socialEmptyLinkedIn
+              : copy.socialEmptyInstagram
           )
         : instagramPreview.feedItems.map((item, idx) =>
             React.createElement(PostCard, {
@@ -197,15 +202,16 @@ function InstagramPreviewSection({
               historyEntries: notesHistoryByPost[item.historyKey] || [],
               onAppendHistory: (postKey, text, action) => appendNoteHistory(item.historyKey, text, action),
               previewMode,
-              clientName: clientMeta?.name || ''
+              clientName: clientMeta?.name || '',
+              copy
             })
           )
     ),
-    instagramPreview.gridPost?.image_url
+    !isLinkedInPreview && instagramPreview.gridPost?.image_url
       ? React.createElement(
           PreviewSection,
           null,
-          React.createElement(PreviewSectionTitle, null, '9άδα Grid Preview (3x3)'),
+          React.createElement(PreviewSectionTitle, null, copy.gridPreviewTitle),
           React.createElement(
             'div',
             { style: gridPreviewFrameStyle },
@@ -222,11 +228,11 @@ function InstagramPreviewSection({
           React.createElement(StoryLine, null, instagramPreview.gridCaption)
         )
       : null,
-    storyItems.length > 0
+    !isLinkedInPreview && storyItems.length > 0
       ? React.createElement(
           PreviewSection,
           null,
-          React.createElement(PreviewSectionTitle, null, 'Instagram Stories Preview (9:16)'),
+          React.createElement(PreviewSectionTitle, null, copy.storiesPreviewTitle),
           React.createElement(
             React.Fragment,
             null,
@@ -395,7 +401,7 @@ function InstagramPreviewSection({
                               color: 'var(--white)'
                             }
                           },
-                          'Χωρίς media'
+                          copy.noMedia
                         )
                   ),
                   React.createElement(
@@ -420,7 +426,7 @@ function InstagramPreviewSection({
                           cursor: viewerStoryIndex <= 0 ? 'default' : 'pointer'
                         }
                       },
-                      'Προηγούμενο'
+                      copy.previous
                     ),
                     React.createElement(
                       'button',
@@ -429,7 +435,7 @@ function InstagramPreviewSection({
                         onClick: () => setViewerStoryIndex(-1),
                         style: storyNavButtonStyle
                       },
-                      'Κλείσιμο'
+                      copy.close
                     ),
                     React.createElement(
                       'button',
@@ -438,7 +444,7 @@ function InstagramPreviewSection({
                         onClick: () => setViewerStoryIndex((prev) => (prev + 1 < storyItems.length ? prev + 1 : -1)),
                         style: storyNavButtonStyle
                       },
-                      viewerStoryIndex + 1 < storyItems.length ? 'Επόμενο' : 'Τέλος'
+                      viewerStoryIndex + 1 < storyItems.length ? copy.next : copy.finish
                     )
                   )
                 )
@@ -459,7 +465,8 @@ function InstagramPreviewSection({
                     onAppendHistory: (postKey, text, action) => appendNoteHistory(storyReviewItem.historyKey, text, action),
                     previewMode,
                     clientName: clientMeta?.name || '',
-                    reviewOnly: true
+                    reviewOnly: true,
+                    copy
                   })
                 )
               : null

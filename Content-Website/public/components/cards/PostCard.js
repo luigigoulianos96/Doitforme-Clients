@@ -45,6 +45,7 @@ import {
 '../../core/styles/App.styles.js';
 import { formatHistoryDateTime } from '../../hooks/useNotesHistory.js';
 import { stripPostTypePrefix, isVideoPost, postOrderLabel } from '../../utils/appHelpers.js';
+import { getPreviewText } from '../../utils/previewText.js';
 
 const ACCEPTED_FEEDBACK_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const ACCEPTED_FEEDBACK_AUDIO_TYPES = [
@@ -78,9 +79,9 @@ function getFileNameFromPath(value) {
   return parts[parts.length - 1] || pathValue;
 }
 
-function CaptionBlock({ username, caption }) {
+function CaptionBlock({ username, caption, copy }) {
   const [expanded, setExpanded] = useState(false);
-  const finalCaption = (caption || 'Η λεζάντα εκκρεμεί...').trim();
+  const finalCaption = (caption || (copy?.isEnglish ? 'Caption pending...' : 'Η λεζάντα εκκρεμεί...')).trim();
   const shouldCollapse = finalCaption.length > 120;
 
   return React.createElement(CaptionWrap, null, React.createElement(Caption, { $expanded:
@@ -91,12 +92,58 @@ function CaptionBlock({ username, caption }) {
 
   shouldCollapse && React.createElement(InlineAction, { type:
     "button", onClick: () => setExpanded((prev) => !prev) },
-  expanded ? 'Δείτε λιγότερα' : 'Δείτε περισσότερα')
+  expanded ? (copy?.isEnglish ? 'See less' : 'Δείτε λιγότερα') : (copy?.isEnglish ? 'See more' : 'Δείτε περισσότερα'))
   ));
 
 
 
 
+}
+
+function LinkedInCaptionBlock({ text, copy }) {
+  const [expanded, setExpanded] = useState(false);
+  const finalText = `${text || (copy?.isEnglish ? 'Post copy pending...' : 'Το κείμενο του post εκκρεμεί...')}`.trim();
+  const shouldCollapse = finalText.length > 160;
+  const visibleText = shouldCollapse && !expanded ? `${finalText.slice(0, 160).trim()}...` : finalText;
+
+  return React.createElement(
+    'div',
+    null,
+    React.createElement(
+      'p',
+      {
+        style: {
+          margin: 0,
+          color: '#111827',
+          fontSize: '1.42rem',
+          lineHeight: 1.5,
+          whiteSpace: 'pre-wrap'
+        }
+      },
+      visibleText
+    ),
+    shouldCollapse
+      ? React.createElement(
+          'button',
+          {
+            type: 'button',
+            onClick: () => setExpanded((prev) => !prev),
+            style: {
+              marginTop: 6,
+              padding: 0,
+              border: 0,
+              background: 'transparent',
+              color: '#6b7280',
+              font: 'inherit',
+              fontSize: '1.32rem',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }
+          },
+          expanded ? 'less' : '... more'
+        )
+      : null
+  );
 }
 
 
@@ -112,9 +159,13 @@ function PostCard({
   instagramKind = 'single',
   carouselSlides = [],
   postIds = [],
-  reviewOnly = false
+  reviewOnly = false,
+  copy = null
 }) {
-  const fallback = previewMode === 'article' ? `Άρθρο ${index + 1}` : `Ανάρτηση ${index + 1}`;
+  const t = copy || getPreviewText(false);
+  const fallback = previewMode === 'article' ? `${t.articleFallbackLabel} ${index + 1}` : `${t.postFallbackLabel} ${index + 1}`;
+  const isLinkedIn = previewMode === 'linkedin';
+  const isSocialPreview = previewMode === 'instagram' || isLinkedIn;
   const [notes, setNotes] = useState('');
   const [articleText, setArticleText] = useState('');
   const [showHistory, setShowHistory] = useState(false);
@@ -142,7 +193,7 @@ function PostCard({
 
   const isInstagramStory = previewMode === 'instagram' && instagramKind === 'story';
   const isStorySectionReview = isInstagramStory && reviewOnly;
-  const isInstagramCarousel = previewMode === 'instagram' && instagramKind === 'carousel';
+  const isInstagramCarousel = isSocialPreview && instagramKind === 'carousel';
   const targetPostIds = postIds.length > 0 ? postIds : [post.id];
   const activeSlides = isInstagramCarousel ?
   carouselSlides.length > 0 ? carouselSlides : [post] :
@@ -250,7 +301,7 @@ function PostCard({
 
     if (!isSupportedFeedbackImage(nextFile)) {
       setDraftAttachmentFile(null);
-      setAttachmentError('Επέλεξε εικόνα JPG, JPEG, PNG ή WEBP.');
+      setAttachmentError(t.selectImageError);
       return;
     }
 
@@ -300,7 +351,7 @@ function PostCard({
 
     const mediaDevices = window.navigator && window.navigator.mediaDevices;
     if (!window.MediaRecorder || !mediaDevices || !mediaDevices.getUserMedia) {
-      setAudioError('Η εγγραφή ήχου δεν υποστηρίζεται σε αυτόν τον browser.');
+      setAudioError(t.audioUnsupportedError);
       return;
     }
 
@@ -329,7 +380,7 @@ function PostCard({
         stopAudioStream();
 
         if (!audioBlob.size) {
-          setAudioError('Δεν καταγράφηκε ήχος.');
+          setAudioError(t.audioEmptyError);
           return;
         }
 
@@ -337,7 +388,7 @@ function PostCard({
       };
 
       recorder.onerror = () => {
-        setAudioError('Η εγγραφή ήχου απέτυχε.');
+        setAudioError(t.audioFailedError);
         audioRecorderRef.current = null;
         setIsRecordingAudio(false);
         stopAudioStream();
@@ -346,7 +397,7 @@ function PostCard({
       recorder.start();
       setIsRecordingAudio(true);
     } catch {
-      setAudioError('Δεν δόθηκε πρόσβαση στο μικρόφωνο.');
+      setAudioError(t.microphoneDeniedError);
       stopAudioStream();
     }
   }
@@ -358,7 +409,7 @@ function PostCard({
     setDraftAttachmentFile(null);
     setAttachmentError('');
     setHideStoredAttachment(true);
-    onAppendHistory(post.id, draftAttachmentFile.name, 'Συνημμένο');
+    onAppendHistory(post.id, draftAttachmentFile.name, t.attachment);
   }
 
   function handleRemoveStoredAttachment() {
@@ -368,7 +419,22 @@ function PostCard({
     setAttachmentError('');
     setRemoveStoredAttachment(true);
     setHideStoredAttachment(true);
-    onAppendHistory(post.id, getFileNameFromPath(post.client_feedback_image_path) || 'Συνημμένο', 'Αφαίρεση συνημμένου');
+    onUpdateReview(
+      targetPostIds,
+      {
+        client_feedback_image_url: '',
+        client_feedback_image_path: ''
+      },
+      t.attachmentRemoved,
+      { feedbackImageRemoved: true }
+    ).then((ok) => {
+      if (!ok) {
+        setRemoveStoredAttachment(false);
+        setHideStoredAttachment(false);
+        return;
+      }
+      onAppendHistory(post.id, getFileNameFromPath(post.client_feedback_image_path) || t.attachment, t.removeAttachmentAction);
+    });
   }
 
   function handleRemoveStoredAudio() {
@@ -382,14 +448,14 @@ function PostCard({
         client_feedback_audio_url: '',
         client_feedback_audio_path: ''
       },
-      'Το ηχητικό αφαιρέθηκε.',
+      t.audioRemoved,
       { feedbackAudioRemoved: true }
     ).then((ok) => {
       if (!ok) {
         setHideStoredAudio(false);
         return;
       }
-      onAppendHistory(post.id, getFileNameFromPath(post.client_feedback_audio_path) || 'Ηχητικό', 'Αφαίρεση ηχητικού');
+      onAppendHistory(post.id, getFileNameFromPath(post.client_feedback_audio_path) || t.audioLabel, t.removeAudioAction);
     });
   }
 
@@ -404,23 +470,23 @@ function PostCard({
     const ok = await onUpdateReview(
       targetPostIds,
       {},
-      'Το ηχητικό ανέβηκε.',
+      t.audioUploaded,
       { feedbackAudioFile: draftAudioFile }
     );
     if (!ok) return;
-    onAppendHistory(post.id, draftAudioFile.name, 'Αποστολή ηχητικού μηνύματος');
+    onAppendHistory(post.id, draftAudioFile.name, t.sendAudioAction);
     clearDraftAudio();
-    setHideStoredAudio(true);
+    setHideStoredAudio(false);
   }
 
   async function handleSaveNotes() {
     if (noteMissing) return;
     const saveMessage = isStorySectionReview
-      ? 'Οι σημειώσεις για τα stories αποθηκεύτηκαν.'
-      : 'Οι σημειώσεις αποθηκεύτηκαν.';
+      ? t.storyNotesSaved
+      : t.notesSaved;
     const ok = await onUpdateReview(targetPostIds, { client_notes: trimmedNotes }, saveMessage);
     if (!ok) return;
-    onAppendHistory(post.id, trimmedNotes, 'Σημείωση');
+    onAppendHistory(post.id, trimmedNotes, t.noteAction);
     setNotes('');
     setNotesOpen(false);
   }
@@ -431,10 +497,10 @@ function PostCard({
     const existingClientNotes = `${post.client_notes || ''}`.trim();
     const clientNotesValue = previewMode === 'article' ? articleValue : trimmedNotes || existingClientNotes;
     const successLabel = previewMode === 'article' ?
-    nextStatus === 'approved' ? 'Το άρθρο εγκρίθηκε.' : 'Το άρθρο απορρίφθηκε.' :
+    nextStatus === 'approved' ? t.articleApproved : t.articleRejected :
     isStorySectionReview ?
-    nextStatus === 'approved' ? 'Το section των stories εγκρίθηκε.' : 'Το section των stories απορρίφθηκε.' :
-    nextStatus === 'approved' ? 'Η ανάρτηση εγκρίθηκε.' : 'Η ανάρτηση απορρίφθηκε.';
+    nextStatus === 'approved' ? t.storiesApproved : t.storiesRejected :
+    nextStatus === 'approved' ? t.postApproved : t.postRejected;
 
     const nextFeedbackFile = draftAttachmentFile || queuedAttachmentFile;
     const ok = await onUpdateReview(
@@ -455,15 +521,15 @@ function PostCard({
     );
     if (!ok) return;
     if (nextFeedbackFile && !queuedAttachmentName) {
-      onAppendHistory(post.id, nextFeedbackFile.name, 'Συνημμένο');
+      onAppendHistory(post.id, nextFeedbackFile.name, t.attachment);
     }
     const articleDecisionHistoryValue = articleValue !== previousArticleText
       ? { beforeText: previousArticleText, afterText: articleValue }
-      : 'Χωρίς αλλαγή κειμένου.';
+      : t.noTextChange;
     onAppendHistory(
       post.id,
-      previewMode === 'article' ? articleDecisionHistoryValue : trimmedNotes || 'Χωρίς σημείωση.',
-      nextStatus === 'approved' ? 'Έγκριση' : 'Απόρριψη'
+      previewMode === 'article' ? articleDecisionHistoryValue : trimmedNotes || t.noNote,
+      nextStatus === 'approved' ? t.approvalAction : t.rejectionAction
     );
     setNotes('');
     clearDraftAttachmentSelection();
@@ -474,10 +540,10 @@ function PostCard({
     setDecisionLocked(true);
     setDecisionNotice(
       previewMode === 'article' ?
-      nextStatus === 'approved' ? 'Εγκρίνατε το άρθρο.' : 'Απορρίψατε το άρθρο.' :
+      nextStatus === 'approved' ? t.articleApprovedNotice : t.articleRejectedNotice :
       isStorySectionReview ?
-      nextStatus === 'approved' ? 'Εγκρίνατε τα stories.' : 'Απορρίψατε τα stories.' :
-      nextStatus === 'approved' ? 'Εγκρίνατε τη δημοσίευση.' : 'Απορρίψατε τη δημοσίευση.'
+      nextStatus === 'approved' ? t.storiesApprovedNotice : t.storiesRejectedNotice :
+      nextStatus === 'approved' ? t.postApprovedNotice : t.postRejectedNotice
     );
   }
 
@@ -488,19 +554,19 @@ function PostCard({
     const ok = await onUpdateReview(
       post.id,
       { client_notes: nextText, approval_status: 'pending' },
-      'Οι αλλαγές άρθρου αποθηκεύτηκαν και στάλθηκαν στον admin.'
+      t.articleChangesSaved
     );
     if (!ok) return;
-    onAppendHistory(post.id, { beforeText: previousText, afterText: nextText }, 'Αλλαγή άρθρου');
+    onAppendHistory(post.id, { beforeText: previousText, afterText: nextText }, t.articleChangeAction);
   }
 
   function getCompactCardStyle() {
     return {
       marginTop: 8,
-      padding: '8px 10px',
-      border: '1px solid rgba(15, 23, 42, 0.08)',
-      borderRadius: 14,
-      background: 'rgba(248, 250, 252, 0.88)'
+      padding: '6px 0 0',
+      borderTop: '1px solid rgba(15, 23, 42, 0.08)',
+      borderRadius: 0,
+      background: 'transparent'
     };
   }
 
@@ -586,7 +652,7 @@ function PostCard({
           'label',
           {
             htmlFor: `feedback-attachment-${post.id}`,
-            title: hasStoredImage || draftAttachmentFile ? 'Screenshot έτοιμο' : 'Προσθήκη screenshot',
+            title: hasStoredImage || draftAttachmentFile ? t.screenshotReady : t.addScreenshot,
             style: {
               ...getIconButtonStyle(Boolean(draftAttachmentFile || hasStoredImage)),
               cursor: pending ? 'default' : 'pointer'
@@ -600,7 +666,7 @@ function PostCard({
             type: 'button',
             onClick: handleAudioRecorderToggle,
             disabled: pending,
-            title: isRecordingAudio ? 'Σταμάτημα εγγραφής' : draftAudioFile ? 'Νέα εγγραφή' : hasStoredAudio ? 'Νέα εγγραφή ηχητικού' : 'Έναρξη εγγραφής',
+            title: isRecordingAudio ? t.stopRecording : draftAudioFile ? t.newRecording : hasStoredAudio ? t.newAudioRecording : t.startRecording,
             style: getIconButtonStyle(Boolean(isRecordingAudio || draftAudioFile || hasStoredAudio))
           },
           renderMicIcon()
@@ -612,7 +678,7 @@ function PostCard({
   function renderFeedbackAttachmentControls() {
     const hasStoredAttachment = Boolean(post.client_feedback_image_path) && !removeStoredAttachment && !hideStoredAttachment;
     const currentAttachmentUrl = draftAttachmentPreviewUrl || (hasStoredAttachment ? post.client_feedback_image_url : '');
-    const currentAttachmentLabel = draftAttachmentFile ? draftAttachmentFile.name : hasStoredAttachment ? 'Αποθηκευμένο attachment feedback' : '';
+    const currentAttachmentLabel = draftAttachmentFile ? draftAttachmentFile.name : hasStoredAttachment ? t.storedAttachmentLabel : '';
 
     return React.createElement(
       'div',
@@ -632,13 +698,13 @@ function PostCard({
         React.createElement(
           'small',
           { style: { fontSize: 12, fontWeight: 600, color: '#334155' } },
-          currentAttachmentLabel || 'Screenshot'
+          currentAttachmentLabel || t.screenshotLabel
         ),
         React.createElement(
           'label',
           {
             htmlFor: `feedback-attachment-${post.id}`,
-            title: 'Προσθήκη εικόνας',
+            title: t.addImage,
             style: {
               ...getIconButtonStyle(Boolean(draftAttachmentFile)),
               cursor: pending ? 'default' : 'pointer'
@@ -647,14 +713,6 @@ function PostCard({
           renderImageIcon()
         )
       ),
-      React.createElement('input', {
-        id: `feedback-attachment-${post.id}`,
-        type: 'file',
-        accept: '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp',
-        onChange: handleAttachmentChange,
-        disabled: pending,
-        style: { display: 'none' }
-      }),
       currentAttachmentLabel ?
         React.createElement(
           'div',
@@ -693,7 +751,7 @@ function PostCard({
                   disabled: pending,
                   style: getMiniActionStyle('confirm')
                 },
-                'Αποστολή'
+                t.upload
               ),
               React.createElement(
                 'button',
@@ -703,7 +761,7 @@ function PostCard({
                   disabled: pending,
                   style: getMiniActionStyle('danger')
                 },
-                'Αφαίρεση'
+                t.remove
               )
             ) :
             hasStoredAttachment ?
@@ -715,7 +773,7 @@ function PostCard({
                   disabled: pending,
                   style: getMiniActionStyle('danger')
                 },
-                'Αφαίρεση'
+                t.remove
               ) :
               null
         ) :
@@ -736,7 +794,7 @@ function PostCard({
       currentAttachmentUrl ?
         React.createElement('img', {
           src: currentAttachmentUrl,
-          alt: 'Preview attachment feedback',
+          alt: t.previewAttachmentAlt,
           style: {
             display: 'block',
             marginTop: 8,
@@ -756,7 +814,7 @@ function PostCard({
     const currentAudioLabel = draftAudioFile ?
       draftAudioFile.name :
       hasStoredAudio ?
-      getFileNameFromPath(post.client_feedback_audio_path) || 'Αποθηκευμένο ηχητικό feedback' :
+      getFileNameFromPath(post.client_feedback_audio_path) || t.storedAudioLabel :
       '';
 
     return React.createElement(
@@ -783,7 +841,7 @@ function PostCard({
               color: '#334155'
             }
           },
-          isRecordingAudio ? 'Γίνεται εγγραφή...' : draftAudioFile ? 'Έτοιμο ηχητικό' : currentAudioLabel || 'Ηχητικό'
+          isRecordingAudio ? t.recordingInProgress : draftAudioFile ? t.audioReadyLabel : currentAudioLabel || t.audioLabel
         ),
         React.createElement(
           'button',
@@ -791,7 +849,7 @@ function PostCard({
             type: 'button',
             onClick: handleAudioRecorderToggle,
             disabled: pending,
-            title: isRecordingAudio ? 'Σταμάτημα εγγραφής' : 'Έναρξη εγγραφής',
+            title: isRecordingAudio ? t.stopRecording : t.startRecording,
             style: getIconButtonStyle(isRecordingAudio)
           },
           renderMicIcon()
@@ -847,7 +905,7 @@ function PostCard({
                   disabled: pending || isRecordingAudio,
                   style: getMiniActionStyle('confirm')
                 },
-                'Αποστολή'
+                t.upload
               ),
               React.createElement(
                 'button',
@@ -857,7 +915,7 @@ function PostCard({
                   disabled: pending || isRecordingAudio,
                   style: getMiniActionStyle('danger')
                 },
-                'Αφαίρεση'
+                t.remove
               )
             ) :
             hasStoredAudio ?
@@ -869,7 +927,7 @@ function PostCard({
                 disabled: pending || isRecordingAudio,
                 style: getMiniActionStyle('danger')
               },
-              'Αφαίρεση'
+              t.remove
             ) :
             null
         ) :
@@ -891,12 +949,12 @@ function PostCard({
   }
 
   function renderInstagramReviewSection() {
-    return React.createElement(ReviewSection, null, React.createElement(ReviewBox, null, React.createElement(ReviewHead, null, React.createElement("span", null, "Σημειώσεις πελάτη"), React.createElement(InlineAction, { type:
+    return React.createElement(ReviewSection, null, React.createElement(ReviewBox, null, React.createElement(ReviewHead, null, React.createElement("span", null, t.clientNotes), React.createElement(InlineAction, { type:
 
 
 
 
-      "button", onClick: () => setShowHistory((prev) => !prev), disabled: (historyEntries || []).length === 0 }, "Ιστορικό σημειώσεων")),
+      "button", onClick: () => setShowHistory((prev) => !prev), disabled: (historyEntries || []).length === 0 }, t.notesHistory)),
 
 
 
@@ -917,33 +975,33 @@ function PostCard({
       "3", value:
       notes, onChange:
       (event) => setNotes(event.target.value), placeholder:
-      isStorySectionReview ? "Γράψε γενικό σχόλιο για όλο το section των stories..." : "Γράψε σχόλιο για αυτή την ανάρτηση..." }), React.createElement(SaveRow, null, renderInlineFeedbackTools(), React.createElement(SaveNoteButton, { type:
+      isStorySectionReview ? t.storyNotePlaceholder : t.notePlaceholder }), React.createElement(SaveRow, null, renderInlineFeedbackTools(), React.createElement(SaveNoteButton, { type:
 
 
-      "button", onClick: handleSaveNotes, disabled: pending || noteMissing }, "⌾ Αποθήκευση")), draftAudioPreviewUrl && React.createElement("audio", { controls: true, src: draftAudioPreviewUrl, style: { display: 'block', width: '100%', marginTop: 6, height: 32 } }), draftAudioFile && React.createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 } }, React.createElement("button", { type: "button", onClick: handleSendDraftAudio, disabled: pending || isRecordingAudio, style: getMiniActionStyle('confirm') }, "Αποστολή"), React.createElement("button", { type: "button", onClick: clearDraftAudio, disabled: pending || isRecordingAudio, style: getMiniActionStyle('danger') }, "Αφαίρεση"))) : React.createElement(React.Fragment, null, React.createElement(NoteCollapsed, { type:
-
-
-
-
-
-      "button", onClick: () => setNotesOpen(true) }, "+ Προσθήκη νέας σημείωσης")), React.createElement(DecisionRow, null,
+      "button", onClick: handleSaveNotes, disabled: pending || noteMissing }, t.save)), renderFeedbackAttachmentControls(), renderFeedbackAudioControls()) : React.createElement(React.Fragment, null, React.createElement(NoteCollapsed, { type:
 
 
 
 
 
-    !decisionLocked && React.createElement(DecisionButton, { type:
-      "button", $type: "approve", onClick: () => handleDecision('approved'), disabled: pending }, "✓ Έγκριση"),
+      "button", onClick: () => setNotesOpen(true) }, t.addNewNote)), React.createElement(DecisionRow, null,
+
+
 
 
 
     !decisionLocked && React.createElement(DecisionButton, { type:
-      "button", $type: "decline", onClick: () => handleDecision('disapproved'), disabled: pending }, "✕ Απόρριψη"),
+      "button", $type: "approve", onClick: () => handleDecision('approved'), disabled: pending }, t.approve),
+
+
+
+    !decisionLocked && React.createElement(DecisionButton, { type:
+      "button", $type: "decline", onClick: () => handleDecision('disapproved'), disabled: pending }, t.reject),
 
 
 
     decisionLocked && React.createElement(DecisionButton, { type:
-      "button", onClick: () => setDecisionLocked(false), disabled: pending }, "Αλλαγή Απόφασης")),
+      "button", onClick: () => setDecisionLocked(false), disabled: pending }, t.changeDecision)),
 
 
 
@@ -965,7 +1023,7 @@ function PostCard({
 
     formatHistoryDateTime(post.created_at), post.username ? ` • ${post.username}` : ''), React.createElement(BlogTitle, null,
 
-    stripPostTypePrefix(post.title) || fallback))), React.createElement(ReviewSection, null, React.createElement(ArticleEditWrap, null, React.createElement(ReviewHead, null, React.createElement("span", null, "Επεξεργασία άρθρου πελάτη"), React.createElement(InlineAction, { type:
+    stripPostTypePrefix(post.title) || fallback))), React.createElement(ReviewSection, null, React.createElement(ArticleEditWrap, null, React.createElement(ReviewHead, null, React.createElement("span", null, t.articleEditTitle), React.createElement(InlineAction, { type:
 
 
 
@@ -973,7 +1031,7 @@ function PostCard({
 
 
 
-      "button", onClick: () => setShowHistory((prev) => !prev), disabled: (historyEntries || []).length === 0 }, "Ιστορικό αλλαγών")),
+      "button", onClick: () => setShowHistory((prev) => !prev), disabled: (historyEntries || []).length === 0 }, t.articleHistory)),
 
 
 
@@ -1008,26 +1066,26 @@ function PostCard({
       (event) => setArticleText(event.target.value), onClick:
       () => setArticleEditorExpanded(true), onBlur:
       () => setArticleEditorExpanded(false), placeholder:
-      "Επεξεργάσου το άρθρο και αποθήκευσε..." }), React.createElement(SaveRow, null, renderInlineFeedbackTools(), React.createElement(SaveNoteButton, { type:
+      t.articlePlaceholder }), React.createElement(SaveRow, null, renderInlineFeedbackTools(), React.createElement(SaveNoteButton, { type:
 
 
-    "button", onClick: handleArticleSave, disabled: pending || articleText.trim().length === 0 }, "⌾ Αποθήκευση αλλαγής άρθρου")), draftAudioPreviewUrl && React.createElement("audio", { controls: true, src: draftAudioPreviewUrl, style: { display: 'block', width: '100%', marginTop: 6, height: 32 } }), draftAudioFile && React.createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 } }, React.createElement("button", { type: "button", onClick: handleSendDraftAudio, disabled: pending || isRecordingAudio, style: getMiniActionStyle('confirm') }, "Αποστολή"), React.createElement("button", { type: "button", onClick: clearDraftAudio, disabled: pending || isRecordingAudio, style: getMiniActionStyle('danger') }, "Αφαίρεση")), React.createElement(DecisionRow, null,
+      "button", onClick: handleArticleSave, disabled: pending || articleText.trim().length === 0 }, t.saveArticleChange)), renderFeedbackAttachmentControls(), renderFeedbackAudioControls(), React.createElement(DecisionRow, null,
 
-
-
-
-    !decisionLocked && React.createElement(DecisionButton, { type:
-      "button", $type: "approve", onClick: () => handleDecision('approved'), disabled: pending }, "✓ Έγκριση"),
 
 
 
     !decisionLocked && React.createElement(DecisionButton, { type:
-      "button", $type: "decline", onClick: () => handleDecision('disapproved'), disabled: pending }, "✕ Απόρριψη"),
+      "button", $type: "approve", onClick: () => handleDecision('approved'), disabled: pending }, t.approve),
+
+
+
+    !decisionLocked && React.createElement(DecisionButton, { type:
+      "button", $type: "decline", onClick: () => handleDecision('disapproved'), disabled: pending }, t.reject),
 
 
 
     decisionLocked && React.createElement(DecisionButton, { type:
-      "button", onClick: () => setDecisionLocked(false), disabled: pending }, "Αλλαγή Απόφασης")
+      "button", onClick: () => setDecisionLocked(false), disabled: pending }, t.changeDecision)
 
     ),
 
@@ -1036,7 +1094,7 @@ function PostCard({
 
 
 
-    pending && React.createElement(LoadingOverlay, null, React.createElement(LoadingBadge, null, "Αποθήκευση..."))
+    pending && React.createElement(LoadingOverlay, null, React.createElement(LoadingBadge, null, t.saving))
 
 
     );
@@ -1045,14 +1103,270 @@ function PostCard({
 
   }
 
-  if (reviewOnly && previewMode === 'instagram') {
+  if (reviewOnly && isSocialPreview) {
     return React.createElement(React.Fragment, null, renderInstagramReviewSection(),
 
 
 
-    pending && React.createElement(LoadingOverlay, null, React.createElement(LoadingBadge, null, "Αποθήκευση..."))
+    pending && React.createElement(LoadingOverlay, null, React.createElement(LoadingBadge, null, t.saving))
 
 
+    );
+  }
+
+  if (isLinkedIn) {
+    const linkedInShellStyle = {
+      position: 'relative',
+      borderRadius: '1.35rem',
+      border: '1px solid rgba(15, 23, 42, 0.12)',
+      background: '#ffffff',
+      color: '#111827',
+      overflow: 'hidden',
+      boxShadow: '0 18px 38px rgba(15, 23, 42, 0.08)'
+    };
+
+    const linkedInHeaderStyle = {
+      display: 'grid',
+      gridTemplateColumns: '56px minmax(0, 1fr) auto',
+      gap: '0.95rem',
+      alignItems: 'start',
+      padding: '1.35rem 1.35rem 0.95rem'
+    };
+
+    const linkedInLogoStyle = {
+      width: 56,
+      height: 56,
+      borderRadius: 12,
+      background: '#111111',
+      color: '#ffffff',
+      display: 'grid',
+      placeItems: 'center',
+      fontSize: '2rem',
+      fontWeight: 800,
+      lineHeight: 1
+    };
+
+    const linkedInMenuRowStyle = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.85rem',
+      color: '#4b5563',
+      fontSize: '2rem',
+      lineHeight: 1
+    };
+
+    const linkedInMediaStyle = {
+      position: 'relative',
+      marginTop: '1rem',
+      background: '#e5e7eb',
+      borderTop: '1px solid rgba(15, 23, 42, 0.08)',
+      borderBottom: '1px solid rgba(15, 23, 42, 0.08)'
+    };
+
+    const linkedInActionRowStyle = {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+      gap: '0.25rem',
+      padding: '0.55rem 0.75rem 0.8rem'
+    };
+
+    const linkedInActionButtonStyle = {
+      border: 0,
+      background: 'transparent',
+      color: '#4b5563',
+      font: 'inherit',
+      fontSize: '1.26rem',
+      fontWeight: 700,
+      padding: '0.7rem 0.35rem',
+      borderRadius: 10
+    };
+
+    return React.createElement(
+      'div',
+      { style: linkedInShellStyle },
+      React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(
+          'div',
+          { style: linkedInHeaderStyle },
+          React.createElement(
+            'div',
+            { style: linkedInLogoStyle, ['aria-hidden']: 'true' },
+            React.createElement('span', null, (clientName || post.username || 'in').slice(0, 2).toLowerCase()),
+            React.createElement('span', { style: { color: '#84cc16' } }, '.')
+          ),
+          React.createElement(
+            'div',
+            { style: { minWidth: 0 } },
+            React.createElement(
+              'strong',
+              {
+                style: {
+                  display: 'block',
+                  fontSize: '1.62rem',
+                  lineHeight: 1.2,
+                  color: '#111827'
+                }
+              },
+              clientName || post.username || 'LinkedIn Preview'
+            ),
+            React.createElement(
+              'div',
+              {
+                style: {
+                  marginTop: 4,
+                  color: '#6b7280',
+                  fontSize: '1.2rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }
+              },
+              React.createElement('span', null, '3d'),
+              React.createElement('span', null, '•'),
+              React.createElement('span', null, 'Public')
+            )
+          ),
+          React.createElement(
+            'div',
+            { style: linkedInMenuRowStyle, ['aria-hidden']: 'true' },
+            React.createElement('span', null, '•••'),
+            React.createElement('span', null, '×')
+          )
+        ),
+        React.createElement(
+          'div',
+          { style: { padding: '0 1.35rem' } },
+          React.createElement(LinkedInCaptionBlock, { text: post.caption, copy: t })
+        ),
+        React.createElement(
+          'div',
+          { style: linkedInMediaStyle },
+          activeSlide.image_url && !isVideo
+            ? React.createElement('img', {
+                src: activeSlide.image_url,
+                alt: stripPostTypePrefix(activeSlide.title) || fallback,
+                loading: 'lazy',
+                style: {
+                  display: 'block',
+                  width: '100%',
+                  maxHeight: '72rem',
+                  objectFit: 'cover'
+                }
+              })
+            : activeSlide.image_url && isVideo
+              ? React.createElement('video', {
+                  src: activeSlide.image_url,
+                  controls: true,
+                  playsInline: true,
+                  preload: 'metadata',
+                  style: {
+                    display: 'block',
+                    width: '100%',
+                    maxHeight: '72rem',
+                    background: '#111827'
+                  }
+                })
+              : React.createElement(
+                  'div',
+                  {
+                    style: {
+                      minHeight: '24rem',
+                      display: 'grid',
+                      placeItems: 'center',
+                      color: '#6b7280',
+                      fontSize: '1.3rem'
+                    }
+                  },
+                  t.noMedia
+                ),
+          isInstagramCarousel && activeSlides.length > 1
+            ? React.createElement(
+                'div',
+                {
+                  style: {
+                    position: 'absolute',
+                    inset: 'auto 0 1rem 0',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    gap: '0.5rem'
+                  }
+                },
+                React.createElement(
+                  'button',
+                  {
+                    type: 'button',
+                    onClick: () => setCarouselIndex((prev) => (prev - 1 + activeSlides.length) % activeSlides.length),
+                    style: {
+                      border: 0,
+                      borderRadius: 999,
+                      width: 34,
+                      height: 34,
+                      background: 'rgba(17, 24, 39, 0.76)',
+                      color: '#ffffff',
+                      fontSize: '1.6rem',
+                      cursor: 'pointer'
+                    }
+                  },
+                  '‹'
+                ),
+                React.createElement(
+                  'button',
+                  {
+                    type: 'button',
+                    onClick: () => setCarouselIndex((prev) => (prev + 1) % activeSlides.length),
+                    style: {
+                      border: 0,
+                      borderRadius: 999,
+                      width: 34,
+                      height: 34,
+                      background: 'rgba(17, 24, 39, 0.76)',
+                      color: '#ffffff',
+                      fontSize: '1.6rem',
+                      cursor: 'pointer'
+                    }
+                  },
+                  '›'
+                )
+              )
+            : null
+        ),
+        React.createElement(
+          'div',
+          {
+            style: {
+              padding: '0.65rem 1.35rem 0',
+              color: '#6b7280',
+              fontSize: '1.14rem',
+              borderBottom: '1px solid rgba(15, 23, 42, 0.08)'
+            }
+          },
+          t.linkedinEngagement
+        ),
+        React.createElement(
+          'div',
+          { style: linkedInActionRowStyle },
+          [t.like, t.comment, t.repost, t.send].map((label) =>
+            React.createElement(
+              'button',
+              {
+                key: label,
+                type: 'button',
+                style: linkedInActionButtonStyle
+              },
+              label
+            )
+          )
+        ),
+        React.createElement('div', {
+          style: {
+            borderTop: '1px solid rgba(15, 23, 42, 0.08)'
+          }
+        }),
+        renderInstagramReviewSection(),
+        pending && React.createElement(LoadingOverlay, null, React.createElement(LoadingBadge, null, t.saving))
+      )
     );
   }
 
@@ -1063,20 +1377,20 @@ function PostCard({
 
 
   clientName || post.username || '', React.createElement(OrderBadge, null,
-  postOrderLabel(post, index)))), React.createElement(Menu, null, "...")), React.createElement(Media, { role:
+  postOrderLabel(post, index)))), React.createElement(Menu, null, isLinkedIn ? 'in' : "...")), React.createElement(Media, { role:
 
 
 
 
 
-    "img", ["aria-label"]: "Προεπισκόπηση ανάρτησης Instagram", $ratio: isInstagramStory ? '9 / 16' : '4 / 5' },
+    "img", ["aria-label"]: isLinkedIn ? t.linkedinPreviewAria : t.instagramPreviewAria, $ratio: isInstagramStory ? '9 / 16' : isLinkedIn ? '16 / 9' : '4 / 5' },
   activeSlide.image_url && !isVideo ? React.createElement("img", { src:
     activeSlide.image_url, alt: stripPostTypePrefix(activeSlide.title) || fallback, loading: "lazy" }) :
   activeSlide.image_url && isVideo ? React.createElement("video", { src:
     activeSlide.image_url, controls: true, playsInline: true, preload: "metadata" }) : React.createElement(React.Fragment, null, React.createElement(MediaTag, null,
 
 
-  previewMode === 'article' ? 'ΠΡΟΕΠΙΣΚΟΠΗΣΗ ΑΡΘΡΟΥ' : 'ΠΡΟΕΠΙΣΚΟΠΗΣΗ ΑΝΑΡΤΗΣΗΣ'), React.createElement(MediaFilename, null,
+  previewMode === 'article' ? t.articlePreview : isLinkedIn ? t.linkedinPreview : t.postPreview), React.createElement(MediaFilename, null,
   stripPostTypePrefix(activeSlide.title) || fallback)),
 
 
@@ -1103,18 +1417,18 @@ function PostCard({
 
 
 
-  !isInstagramStory && React.createElement(LikesLine, null, previewMode === 'article' ? 'Article Preview' : '9,311 likes'),
+  !isInstagramStory && React.createElement(LikesLine, null, previewMode === 'article' ? t.articlePreviewLine : isLinkedIn ? t.linkedinEngagement : t.instagramLikesLine),
 
   !isInstagramStory && React.createElement(PostBody, null, React.createElement(CaptionBlock, { username:
 
-    post.username, caption: post.caption })),
+    post.username, caption: post.caption, copy: t })),
 
 
-  previewMode === 'instagram' && renderInstagramReviewSection(),
+  isSocialPreview && renderInstagramReviewSection(),
 
 
 
-  pending && React.createElement(LoadingOverlay, null, React.createElement(LoadingBadge, null, "Αποθήκευση..."))
+  pending && React.createElement(LoadingOverlay, null, React.createElement(LoadingBadge, null, t.saving))
 
 
   );

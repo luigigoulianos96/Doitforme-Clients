@@ -208,6 +208,11 @@ function PortalApp() {
   const [configError, setConfigError] = useState('');
   const [busy, setBusy] = useState(false);
   const [webPushActive, setWebPushActive] = useState(false);
+
+  function hasMissingColumnError(error, columns) {
+    const message = `${error?.message || ''}`.toLowerCase();
+    return columns.some((column) => message.includes(`${column}`.toLowerCase()));
+  }
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [clients, setClients] = useState([]);
@@ -236,10 +241,19 @@ function PortalApp() {
   }, []);
 
   async function loadPortalData() {
-    const { data: clientsData, error: clientsError } = await client
+    let { data: clientsData, error: clientsError } = await client
       .from('clients')
-      .select('id,name,slug,created_at')
+      .select('id,name,slug,created_at,english_language')
       .order('created_at', { ascending: false });
+
+    if (clientsError && hasMissingColumnError(clientsError, ['english_language'])) {
+      const fallbackResult = await client
+        .from('clients')
+        .select('id,name,slug,created_at')
+        .order('created_at', { ascending: false });
+      clientsData = (fallbackResult.data || []).map((item) => ({ ...item, english_language: false }));
+      clientsError = fallbackResult.error;
+    }
 
     if (clientsError) {
       setStatus(`Σφάλμα φόρτωσης clients: ${clientsError.message}`);
@@ -346,10 +360,19 @@ function PortalApp() {
     setBusy(true);
     setStatus('Δημιουργία νέου client feed...');
 
-    const { error } = await client.from('clients').insert({
+    let { error } = await client.from('clients').insert({
       name: clientNameInput.trim(),
-      slug: uniqueSlug
+      slug: uniqueSlug,
+      english_language: false
     });
+
+    if (error && hasMissingColumnError(error, ['english_language'])) {
+      const fallbackResult = await client.from('clients').insert({
+        name: clientNameInput.trim(),
+        slug: uniqueSlug
+      });
+      error = fallbackResult.error;
+    }
 
     if (error) {
       setStatus(`Σφάλμα δημιουργίας client: ${error.message}`);
@@ -361,6 +384,33 @@ function PortalApp() {
     setStatus('Ο client δημιουργήθηκε.');
     await loadPortalData();
     setBusy(false);
+  }
+
+  async function toggleClientEnglish(feedClient, enabled) {
+    if (!client || !feedClient?.id) return;
+
+    setClients((prev) =>
+      prev.map((item) => (item.id === feedClient.id ? { ...item, english_language: enabled } : item))
+    );
+
+    const { error } = await client
+      .from('clients')
+      .update({ english_language: enabled })
+      .eq('id', feedClient.id);
+
+    if (error) {
+      setClients((prev) =>
+        prev.map((item) => (item.id === feedClient.id ? { ...item, english_language: !enabled } : item))
+      );
+      setStatus(
+        hasMissingColumnError(error, ['english_language'])
+          ? 'Λείπει το clients.english_language στη βάση. Τρέξε το update στο supabase/schema.sql.'
+          : `Σφάλμα ενημέρωσης γλώσσας: ${error.message}`
+      );
+      return;
+    }
+
+    setStatus(`Η γλώσσα preview για τον client "${feedClient.name}" ορίστηκε σε ${enabled ? 'English' : 'Greek'}.`);
   }
 
   async function deleteClientFeed(feedClient) {
@@ -522,6 +572,14 @@ function PortalApp() {
               <Card key={feedClient.id}>
                 <h3>{feedClient.name}</h3>
                 <p>Slug: {feedClient.slug}</p>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontSize: '0.95rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(feedClient.english_language)}
+                    onChange={(event) => toggleClientEnglish(feedClient, event.target.checked)}
+                  />
+                  English language (preview only)
+                </label>
                 <p>
                   Αλλαγές προς review: <Badge>{changes}</Badge>
                 </p>

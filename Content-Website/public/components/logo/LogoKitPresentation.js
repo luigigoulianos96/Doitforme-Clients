@@ -21,7 +21,8 @@ function LogoKitPresentation({
   pending,
   historyEntries,
   onAppendHistory,
-  onUpdateLogoKitReview
+  onUpdateLogoKitReview,
+  copy
 }) {
   const model = useMemo(
     () => buildLogoPreviewModel({ logoKit, assets, colors, storySteps, clientName, parseLogoAssetCategory }),
@@ -53,7 +54,8 @@ function LogoKitPresentation({
           supportsFeedbackAudio: supportsLogoFeedbackAudio,
           historyEntries,
           onAppendHistory,
-          onUpdateLogoKitReview
+          onUpdateLogoKitReview,
+          copy
         })
       : null
   );

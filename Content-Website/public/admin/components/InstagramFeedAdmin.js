@@ -357,6 +357,8 @@ function MediaPreview({ item, ratio = '4 / 5' }) {
 
 export default function InstagramFeedAdmin(props) {
   const {
+    platformName = 'Instagram',
+    showStoriesTools = true,
     busy,
     dragActive,
     orderLocked,
@@ -484,7 +486,7 @@ export default function InstagramFeedAdmin(props) {
           h(
             'strong',
             { style: uploadHeadingStyle },
-            'Ανέβασμα feed post'
+            `Ανέβασμα ${platformName} feed post`
           ),
           h('span', null, 'Αρχεία εικόνας ή βίντεο'),
           h(
@@ -719,154 +721,156 @@ export default function InstagramFeedAdmin(props) {
         )
       )
     ),
-    h(
-      CollapsiblePanel,
-      { title: 'Stories & 9άδα' },
-      h(
-        'section',
-        { style: groupedStorySectionStyle('var(--warning, #f4d35e)') },
-        h(
-          'div',
-          { style: groupedSectionHeadStyle },
-          h('span', { style: groupedSectionKickerStyle('var(--warning, #f4d35e)') }, 'Upload 9άδας'),
-          h('h2', { style: sectionTitleStyle }, 'Ενιαία 9άδα PNG'),
-          h('small', { style: groupedSectionHintStyle }, 'Ξεχωριστή περιοχή μόνο για το ενιαίο PNG της 9άδας.')
-        ),
-        h(
-          'div',
-          {
-            style: uploadZoneStyle('var(--warning, #f4d35e)', dragActive, false),
-            onDragOver: (event) => {
-              event.preventDefault();
-              setDragActive(true);
-            },
-            onDragLeave: () => setDragActive(false),
-            onDrop: (event) => {
-              event.preventDefault();
-              setDragActive(false);
-              appendInstagramGridFiles(event.dataTransfer.files);
-            }
-          },
+    showStoriesTools
+      ? h(
+          CollapsiblePanel,
+          { title: 'Stories & 9άδα' },
           h(
-            'strong',
-            { style: uploadHeadingStyle },
-            'Ρίξε 1 PNG για την ενιαία 9άδα'
-          ),
-          h('span', { style: uploadSubLabelStyle }, 'Μονό αρχείο'),
-          h(
-            'label',
-            { style: buttonStyle },
-            'PNG',
-            h('input', {
-              type: 'file',
-              accept: '.png,image/png',
-              style: { display: 'none' },
-              onChange: (event) => {
-                appendInstagramGridFiles(event.target.files || []);
-                event.target.value = '';
-              }
-            })
-          )
-        ),
-        instagramGridItems.length > 0
-          ? h(
-              'div',
-              { style: compactPreviewGridStyle },
-              instagramGridItems.map((item) =>
-                h(
-                  'div',
-                  { key: item.id, style: compactPreviewTileStyle },
-                  h(MediaPreview, { item, ratio: '1 / 1' }),
-                  h('small', { style: helperTextStyle }, item.file.name),
-                  h('button', { type: 'button', style: dangerButtonStyle, onClick: clearInstagramGrid }, 'Αφαίρεση')
-                )
-              )
-            )
-          : null
-      ),
-      h(
-        'section',
-        { style: groupedStorySectionStyle('var(--focus)') },
-        h(
-          'div',
-          { style: groupedSectionHeadStyle },
-          h('span', { style: groupedSectionKickerStyle('var(--focus)') }, 'Uploads stories'),
-          h('h2', { style: sectionTitleStyle }, 'Stories αρχεία'),
-          h('small', { style: groupedSectionHintStyle }, 'Ξεχωριστή περιοχή για stories σε κατακόρυφο format.')
-        ),
-        h(
-          'div',
-          {
-            style: uploadZoneStyle('var(--focus)', dragActive, false),
-            onDragOver: (event) => {
-              event.preventDefault();
-              setDragActive(true);
-            },
-            onDragLeave: () => setDragActive(false),
-            onDrop: (event) => {
-              event.preventDefault();
-              setDragActive(false);
-              appendInstagramStories(event.dataTransfer.files);
-            }
-          },
-          h(
-            'strong',
-            { style: uploadHeadingStyle },
-            'Ρίξε εικόνες/βίντεο για Stories (9:16)'
-          ),
-          h('span', { style: uploadSubLabelStyle }, 'Σετ stories'),
-          h(
-            'label',
-            { style: buttonStyle },
-            'Stories',
-            h('input', {
-              type: 'file',
-              accept: 'image/*,video/*',
-              multiple: true,
-              style: { display: 'none' },
-              onChange: (event) => {
-                appendInstagramStories(event.target.files || []);
-                event.target.value = '';
-              }
-            })
-          )
-        ),
-        instagramStoryItems.length > 0
-          ? h(
-              'div',
-              { style: compactPreviewGridStyle },
-              instagramStoryItems.map((item) =>
-                h(
-                  'div',
-                  { key: item.id, style: compactPreviewTileStyle },
-                  h(MediaPreview, { item, ratio: '9 / 16' }),
-                  h('small', { style: helperTextStyle }, item.file.name),
-                  h('button', { type: 'button', style: dangerButtonStyle, onClick: () => removeInstagramStoryItem(item.id) }, 'Αφαίρεση')
-                )
-              )
-            )
-          : null
-      ),
-      instagramGridItems.length > 0 || instagramStoryItems.length > 0
-        ? h(
             'section',
-            { style: groupedActionSectionStyle },
+            { style: groupedStorySectionStyle('var(--warning, #f4d35e)') },
             h(
               'div',
-              { style: ctaActionRowStyle },
-              h(
-                'button',
-                {
-                  type: 'button',
-                  style: ctaButtonStyle,
-                  disabled: busy,
-                  onClick: onSubmitStories
+              { style: groupedSectionHeadStyle },
+              h('span', { style: groupedSectionKickerStyle('var(--warning, #f4d35e)') }, 'Upload 9άδας'),
+              h('h2', { style: sectionTitleStyle }, 'Ενιαία 9άδα PNG'),
+              h('small', { style: groupedSectionHintStyle }, 'Ξεχωριστή περιοχή μόνο για το ενιαίο PNG της 9άδας.')
+            ),
+            h(
+              'div',
+              {
+                style: uploadZoneStyle('var(--warning, #f4d35e)', dragActive, false),
+                onDragOver: (event) => {
+                  event.preventDefault();
+                  setDragActive(true);
                 },
-                busy ? 'Φόρτωση' : 'Ανέβασμα'
+                onDragLeave: () => setDragActive(false),
+                onDrop: (event) => {
+                  event.preventDefault();
+                  setDragActive(false);
+                  appendInstagramGridFiles(event.dataTransfer.files);
+                }
+              },
+              h(
+                'strong',
+                { style: uploadHeadingStyle },
+                'Ρίξε 1 PNG για την ενιαία 9άδα'
+              ),
+              h('span', { style: uploadSubLabelStyle }, 'Μονό αρχείο'),
+              h(
+                'label',
+                { style: buttonStyle },
+                'PNG',
+                h('input', {
+                  type: 'file',
+                  accept: '.png,image/png',
+                  style: { display: 'none' },
+                  onChange: (event) => {
+                    appendInstagramGridFiles(event.target.files || []);
+                    event.target.value = '';
+                  }
+                })
               )
-            )
-          )
-        : null
-    )
+            ),
+            instagramGridItems.length > 0
+              ? h(
+                  'div',
+                  { style: compactPreviewGridStyle },
+                  instagramGridItems.map((item) =>
+                    h(
+                      'div',
+                      { key: item.id, style: compactPreviewTileStyle },
+                      h(MediaPreview, { item, ratio: '1 / 1' }),
+                      h('small', { style: helperTextStyle }, item.file.name),
+                      h('button', { type: 'button', style: dangerButtonStyle, onClick: clearInstagramGrid }, 'Αφαίρεση')
+                    )
+                  )
+                )
+              : null
+          ),
+          h(
+            'section',
+            { style: groupedStorySectionStyle('var(--focus)') },
+            h(
+              'div',
+              { style: groupedSectionHeadStyle },
+              h('span', { style: groupedSectionKickerStyle('var(--focus)') }, 'Uploads stories'),
+              h('h2', { style: sectionTitleStyle }, 'Stories αρχεία'),
+              h('small', { style: groupedSectionHintStyle }, 'Ξεχωριστή περιοχή για stories σε κατακόρυφο format.')
+            ),
+            h(
+              'div',
+              {
+                style: uploadZoneStyle('var(--focus)', dragActive, false),
+                onDragOver: (event) => {
+                  event.preventDefault();
+                  setDragActive(true);
+                },
+                onDragLeave: () => setDragActive(false),
+                onDrop: (event) => {
+                  event.preventDefault();
+                  setDragActive(false);
+                  appendInstagramStories(event.dataTransfer.files);
+                }
+              },
+              h(
+                'strong',
+                { style: uploadHeadingStyle },
+                'Ρίξε εικόνες/βίντεο για Stories (9:16)'
+              ),
+              h('span', { style: uploadSubLabelStyle }, 'Σετ stories'),
+              h(
+                'label',
+                { style: buttonStyle },
+                'Stories',
+                h('input', {
+                  type: 'file',
+                  accept: 'image/*,video/*',
+                  multiple: true,
+                  style: { display: 'none' },
+                  onChange: (event) => {
+                    appendInstagramStories(event.target.files || []);
+                    event.target.value = '';
+                  }
+                })
+              )
+            ),
+            instagramStoryItems.length > 0
+              ? h(
+                  'div',
+                  { style: compactPreviewGridStyle },
+                  instagramStoryItems.map((item) =>
+                    h(
+                      'div',
+                      { key: item.id, style: compactPreviewTileStyle },
+                      h(MediaPreview, { item, ratio: '9 / 16' }),
+                      h('small', { style: helperTextStyle }, item.file.name),
+                      h('button', { type: 'button', style: dangerButtonStyle, onClick: () => removeInstagramStoryItem(item.id) }, 'Αφαίρεση')
+                    )
+                  )
+                )
+              : null
+          ),
+          instagramGridItems.length > 0 || instagramStoryItems.length > 0
+            ? h(
+                'section',
+                { style: groupedActionSectionStyle },
+                h(
+                  'div',
+                  { style: ctaActionRowStyle },
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      style: ctaButtonStyle,
+                      disabled: busy,
+                      onClick: onSubmitStories
+                    },
+                    busy ? 'Φόρτωση' : 'Ανέβασμα'
+                  )
+                )
+              )
+            : null
+        )
+      : null
   );
 }

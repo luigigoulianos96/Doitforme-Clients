@@ -8,6 +8,7 @@ import {
   getPreviewModeFromUrl,
   getLogoProposalNumberFromUrl
 } from './utils/appHelpers.js';
+import { getPreviewText } from './utils/previewText.js';
 import { AppPageLayout } from './components/layout/AppPageLayout.js';
 import { HeroStatsSection } from './components/sections/HeroStatsSection.js';
 import { StatusMessagesSection } from './components/sections/StatusMessagesSection.js';
@@ -48,6 +49,7 @@ function App() {
     pageTitle,
     pageSubtitle
   } = usePreviewComputed(posts, previewMode, logoKit, clientMeta);
+  const previewText = getPreviewText(Boolean(clientMeta?.english_language));
 
   return (
     <AppPageLayout>
@@ -58,10 +60,11 @@ function App() {
           approvedCount={approvedCount}
           disapprovedCount={disapprovedCount}
           needsReviewCount={needsReviewCount}
+          copy={previewText}
         />
       )}
 
-      <StatusMessagesSection status={status} />
+      <StatusMessagesSection status={status} copy={previewText} />
 
       <ArticlePreviewSection
         status={status}
@@ -73,6 +76,7 @@ function App() {
         notesHistoryByPost={notesHistoryByPost}
         appendNoteHistory={appendNoteHistory}
         PostCard={PostCard}
+        copy={previewText}
       />
 
       <InstagramPreviewSection
@@ -85,6 +89,7 @@ function App() {
         notesHistoryByPost={notesHistoryByPost}
         appendNoteHistory={appendNoteHistory}
         PostCard={PostCard}
+        copy={previewText}
       />
 
       <LogoPreviewSection
@@ -105,6 +110,7 @@ function App() {
         appendNoteHistory={appendNoteHistory}
         updateLogoKitReview={updateLogoKitReview}
         LogoKitPresentation={LogoKitPresentation}
+        copy={previewText}
       />
     </AppPageLayout>
   );

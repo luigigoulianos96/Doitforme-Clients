@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createSupabaseClient } from '../services/supabaseClient.js';
 import { deleteFile, getPublicUrl, uploadFile } from '../services/storageService.js';
 import { notifyReviewEvent } from '../services/reviewPushService.js';
+import { getPreviewText } from '../utils/previewText.js';
 
 function sanitizePathSegment(value, fallback) {
   const cleaned = `${value || ''}`
@@ -98,33 +99,51 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
   const [supportsFeedbackAudio, setSupportsFeedbackAudio] = useState(true);
   const [supportsLogoFeedbackImages, setSupportsLogoFeedbackImages] = useState(true);
   const [supportsLogoFeedbackAudio, setSupportsLogoFeedbackAudio] = useState(true);
+  const t = getPreviewText(Boolean(clientMeta?.english_language));
 
   useEffect(() => {
     const clientName = clientMeta?.name || 'Clients Feed';
-    const modeLabel = previewMode === 'article' ? 'Άρθρα' : previewMode === 'logo' ? 'Logo Kit' : 'Instagram';
+    const isEnglish = Boolean(clientMeta?.english_language);
+    const modeLabel = previewMode === 'article'
+      ? (isEnglish ? 'Articles' : 'Άρθρα')
+      : previewMode === 'logo'
+        ? 'Logo Kit'
+        : previewMode === 'linkedin'
+          ? 'LinkedIn'
+          : (isEnglish ? 'Instagram' : 'Instagram');
     document.title = `${clientName} - ${modeLabel} Preview`;
   }, [clientMeta, previewMode]);
 
   useEffect(() => {
     const client = createSupabaseClient();
     if (!client) {
-      setStatus({ loading: false, error: 'Ρύθμισε τα Supabase keys στο /public/config.js', message: '' });
+      setStatus({ loading: false, error: t.configureSupabaseKeys, message: '' });
       return;
     }
 
     if (!clientSlug) {
-      setStatus({ loading: false, error: 'Λείπει client link. Χρησιμοποίησε το preview link από το portal.', message: '' });
+      setStatus({ loading: false, error: t.missingClientLink, message: '' });
       return;
     }
 
     client
       .from('clients')
-      .select('id,name,slug')
+      .select('id,name,slug,english_language')
       .eq('slug', clientSlug)
       .single()
-      .then(({ data: clientData, error: clientError }) => {
+      .then(async ({ data: clientData, error: clientError }) => {
+        if (clientError && hasMissingColumnError(clientError, ['english_language'])) {
+          const fallbackResult = await client
+            .from('clients')
+            .select('id,name,slug')
+            .eq('slug', clientSlug)
+            .single();
+          clientData = fallbackResult.data ? { ...fallbackResult.data, english_language: false } : fallbackResult.data;
+          clientError = fallbackResult.error;
+        }
+
         if (clientError) {
-          setStatus({ loading: false, error: 'Το client link δεν είναι έγκυρο.', message: '' });
+          setStatus({ loading: false, error: t.invalidClientLink, message: '' });
           return;
         }
 
@@ -175,7 +194,7 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
               if (assetsError || colorsError || storyError) {
                 setStatus({
                   loading: false,
-                  error: assetsError?.message || colorsError?.message || storyError?.message || 'Σφάλμα logo kit φόρτωσης',
+                  error: assetsError?.message || colorsError?.message || storyError?.message || t.logoKitLoadError,
                   message: ''
                 });
                 return;
@@ -184,7 +203,7 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
               if (feedbackAssetsError && !hasMissingRelationError(feedbackAssetsError, 'logo_kit_feedback_assets')) {
                 setStatus({
                   loading: false,
-                  error: feedbackAssetsError.message || 'Σφάλμα logo feedback φόρτωσης',
+                  error: feedbackAssetsError.message || t.logoFeedbackLoadError,
                   message: ''
                 });
                 return;
@@ -258,7 +277,7 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
     if (options.feedbackImageFile || options.feedbackAudioFile) {
       const primaryTarget = targetPosts[0];
       if (!primaryTarget) {
-        setStatus((prev) => ({ ...prev, message: 'Δεν βρέθηκε το post για upload attachment.' }));
+        setStatus((prev) => ({ ...prev, message: t.missingPostForAttachmentUpload }));
         setSavingId(null);
         return false;
       }
@@ -266,7 +285,7 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
       if (options.feedbackImageFile && !supportsFeedbackImages) {
         setStatus((prev) => ({
           ...prev,
-          message: 'Το schema δεν έχει ενημερωθεί ακόμα για image feedback attachments. Τρέξε το νέο SQL update στο Supabase.'
+          message: t.schemaImageFeedbackMissing
         }));
         setSavingId(null);
         return false;
@@ -275,7 +294,7 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
       if (options.feedbackAudioFile && !supportsFeedbackAudio) {
         setStatus((prev) => ({
           ...prev,
-          message: 'Το schema δεν έχει ενημερωθεί ακόμα για audio feedback attachments. Τρέξε το νέο SQL update στο Supabase.'
+          message: t.schemaAudioFeedbackMissing
         }));
         setSavingId(null);
         return false;
@@ -293,7 +312,7 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
             client_feedback_image_url: getPublicUrl(uploadedFeedbackImagePath)
           };
         } catch (error) {
-          setStatus((prev) => ({ ...prev, message: `Σφάλμα upload εικόνας: ${error.message}` }));
+          setStatus((prev) => ({ ...prev, message: `${t.imageUploadErrorPrefix}: ${error.message}` }));
           setSavingId(null);
           return false;
         }
@@ -314,7 +333,7 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
           if (uploadedFeedbackImagePath) {
             await removeFeedbackAsset(uploadedFeedbackImagePath);
           }
-          setStatus((prev) => ({ ...prev, message: `Σφάλμα upload ήχου: ${error.message}` }));
+          setStatus((prev) => ({ ...prev, message: `${t.audioUploadErrorPrefix}: ${error.message}` }));
           setSavingId(null);
           return false;
         }
@@ -337,7 +356,7 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
       if (uploadedFeedbackAudioPath) {
         await removeFeedbackAsset(uploadedFeedbackAudioPath);
       }
-      setStatus((prev) => ({ ...prev, message: `Σφάλμα ενημέρωσης: ${error.message}` }));
+      setStatus((prev) => ({ ...prev, message: `${t.updateErrorPrefix}: ${error.message}` }));
       setSavingId(null);
       return false;
     }
@@ -355,10 +374,10 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
               ...post,
               approval_status: rowsById[post.id].approval_status,
               client_notes: rowsById[post.id].client_notes,
-              client_feedback_image_url: rowsById[post.id].client_feedback_image_url || post.client_feedback_image_url || '',
-              client_feedback_image_path: rowsById[post.id].client_feedback_image_path || post.client_feedback_image_path || '',
-              client_feedback_audio_url: rowsById[post.id].client_feedback_audio_url || post.client_feedback_audio_url || '',
-              client_feedback_audio_path: rowsById[post.id].client_feedback_audio_path || post.client_feedback_audio_path || ''
+              client_feedback_image_url: Object.prototype.hasOwnProperty.call(rowsById[post.id], 'client_feedback_image_url') ? (rowsById[post.id].client_feedback_image_url || '') : (post.client_feedback_image_url || ''),
+              client_feedback_image_path: Object.prototype.hasOwnProperty.call(rowsById[post.id], 'client_feedback_image_path') ? (rowsById[post.id].client_feedback_image_path || '') : (post.client_feedback_image_path || ''),
+              client_feedback_audio_url: Object.prototype.hasOwnProperty.call(rowsById[post.id], 'client_feedback_audio_url') ? (rowsById[post.id].client_feedback_audio_url || '') : (post.client_feedback_audio_url || ''),
+              client_feedback_audio_path: Object.prototype.hasOwnProperty.call(rowsById[post.id], 'client_feedback_audio_path') ? (rowsById[post.id].client_feedback_audio_path || '') : (post.client_feedback_audio_path || '')
             }
           : post
       )
@@ -415,13 +434,13 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
 
     if (options.feedbackImageFile || options.feedbackAudioFile) {
       if (options.feedbackImageFile && !supportsLogoFeedbackImages) {
-        setStatus((prev) => ({ ...prev, message: 'Τα screenshot feedback δεν υποστηρίζονται ακόμα για logo kits.' }));
+        setStatus((prev) => ({ ...prev, message: t.logoScreenshotUnsupported }));
         setSavingId(null);
         return false;
       }
 
       if (options.feedbackAudioFile && !supportsLogoFeedbackAudio) {
-        setStatus((prev) => ({ ...prev, message: 'Τα ηχητικά feedback δεν υποστηρίζονται ακόμα για logo kits.' }));
+        setStatus((prev) => ({ ...prev, message: t.logoAudioUnsupported }));
         setSavingId(null);
         return false;
       }
@@ -443,7 +462,7 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
       } catch (error) {
         if (uploadedFeedbackImagePath) await removeFeedbackAsset(uploadedFeedbackImagePath);
         if (uploadedFeedbackAudioPath) await removeFeedbackAsset(uploadedFeedbackAudioPath);
-        setStatus((prev) => ({ ...prev, message: `Σφάλμα ανεβάσματος αρχείου: ${error.message || 'Άγνωστο σφάλμα'}` }));
+        setStatus((prev) => ({ ...prev, message: `${t.fileUploadErrorPrefix}: ${error.message || t.unknownError}` }));
         setSavingId(null);
         return false;
       }
@@ -459,7 +478,7 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
     if (error) {
       if (uploadedFeedbackImagePath) await removeFeedbackAsset(uploadedFeedbackImagePath);
       if (uploadedFeedbackAudioPath) await removeFeedbackAsset(uploadedFeedbackAudioPath);
-      setStatus((prev) => ({ ...prev, message: `Σφάλμα ενημέρωσης: ${error.message}` }));
+      setStatus((prev) => ({ ...prev, message: `${t.updateErrorPrefix}: ${error.message}` }));
       setSavingId(null);
       return false;
     }
@@ -515,7 +534,7 @@ function usePreviewData(clientSlug, previewMode, logoProposalNumber = 1) {
     } catch (feedbackError) {
       if (uploadedFeedbackImagePath) await removeFeedbackAsset(uploadedFeedbackImagePath);
       if (uploadedFeedbackAudioPath) await removeFeedbackAsset(uploadedFeedbackAudioPath);
-      setStatus((prev) => ({ ...prev, message: `Σφάλμα ενημέρωσης logo feedback: ${feedbackError.message}` }));
+      setStatus((prev) => ({ ...prev, message: `${t.logoFeedbackUpdateErrorPrefix}: ${feedbackError.message}` }));
       setSavingId(null);
       return false;
     }

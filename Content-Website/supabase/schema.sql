@@ -27,9 +27,13 @@ create table if not exists public.clients (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   slug text not null unique,
+  english_language boolean not null default false,
   created_at timestamptz not null default now(),
   created_by uuid references auth.users(id)
 );
+
+alter table public.clients
+  add column if not exists english_language boolean not null default false;
 
 alter table public.posts
   add column if not exists approval_status text not null default 'pending' check (approval_status in ('pending', 'approved', 'disapproved')),

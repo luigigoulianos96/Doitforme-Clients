@@ -10,7 +10,8 @@ function ArticlePreviewSection({
   updateReview,
   notesHistoryByPost,
   appendNoteHistory,
-  PostCard
+  PostCard,
+  copy
 }) {
   return React.createElement(
     React.Fragment,
@@ -23,7 +24,7 @@ function ArticlePreviewSection({
             ? React.createElement(
                 State,
                 null,
-                'Δεν υπάρχουν δημοσιευμένα στοιχεία ακόμα για αυτό το tab. Μπες στη Διαχείριση για ανέβασμα.'
+                copy.articleEmpty
               )
             : filteredPosts.map((post, idx) =>
                 React.createElement(PostCard, {
@@ -35,7 +36,8 @@ function ArticlePreviewSection({
                   historyEntries: notesHistoryByPost[post.id] || [],
                   onAppendHistory: appendNoteHistory,
                   previewMode,
-                  clientName: clientMeta?.name || ''
+                  clientName: clientMeta?.name || '',
+                  copy
                 })
               )
         )

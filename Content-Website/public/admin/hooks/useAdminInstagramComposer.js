@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 
 export default function useAdminInstagramComposer({
+  contentType = 'instagram',
+  contentLabel = 'Instagram',
+  allowStories = true,
+  allowGrid = true,
   client,
   session,
   selectedClient,
@@ -260,7 +264,7 @@ export default function useAdminInstagramComposer({
     const carouselEntries = new Map();
 
     posts
-      .filter((post) => parsePostType(post) === 'instagram')
+      .filter((post) => parsePostType(post) === contentType)
       .forEach((post) => {
         const meta = instagramEntryMeta(post);
 
@@ -322,7 +326,7 @@ export default function useAdminInstagramComposer({
     });
 
     return next;
-  }, [posts, parsePostType, instagramEntryMeta, stripPostTypePrefix, isVideoPost]);
+  }, [posts, parsePostType, instagramEntryMeta, stripPostTypePrefix, isVideoPost, contentType]);
 
   const existingFeedOrderItems = useMemo(
     () => existingFeedPreviewItems.map((item) => ({ id: item.id, kind: item.kind, refId: item.refId })),
@@ -437,7 +441,7 @@ export default function useAdminInstagramComposer({
     const totalUploads = mediaItems.length + carouselSlideCount;
     const canRefreshExistingFeedOrder = existingFeedOrderItems.length > 0;
     if (totalUploads === 0 && !canRefreshExistingFeedOrder) {
-      setStatus('Ανέβασε τουλάχιστον ένα feed post ή carousel.');
+      setStatus(`Ανέβασε τουλάχιστον ένα ${contentLabel} feed post ή carousel.`);
       return;
     }
 
@@ -456,7 +460,7 @@ export default function useAdminInstagramComposer({
     const mediaById = new Map(mediaItems.map((item) => [item.id, item]));
     const carouselById = new Map(carouselPosts.map((carouselPost) => [carouselPost.id, carouselPost]));
     const existingFeedById = new Map(existingFeedPreviewItems.map((item) => [item.id, item]));
-    const existingInstagramPosts = posts.filter((post) => parsePostType(post) === 'instagram');
+    const existingInstagramPosts = posts.filter((post) => parsePostType(post) === contentType);
     const existingStoryPosts = existingInstagramPosts
       .filter((post) => instagramEntryMeta(post).kind === 'story')
       .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
@@ -538,7 +542,7 @@ export default function useAdminInstagramComposer({
 
         const { data: publicData } = storage.getPublicUrl(path);
         const payload = {
-          title: makeTypedTitle('instagram', `SINGLE::${file.name}`),
+          title: makeTypedTitle(contentType, `SINGLE::${file.name}`),
           image_url: publicData.publicUrl,
           image_path: path,
           caption: captions[draftCaptionCursor] || `Post ${draftCaptionCursor + 1}: Η λεζάντα εκκρεμεί.`,
@@ -581,7 +585,7 @@ export default function useAdminInstagramComposer({
 
           const { data: publicData } = storage.getPublicUrl(path);
           const payload = {
-            title: makeTypedTitle('instagram', `CAROUSEL::${carouselGroupId}::${slideIndex + 1}::${file.name}`),
+            title: makeTypedTitle(contentType, `CAROUSEL::${carouselGroupId}::${slideIndex + 1}::${file.name}`),
             image_url: publicData.publicUrl,
             image_path: path,
             caption: carouselCaption,
@@ -641,6 +645,7 @@ export default function useAdminInstagramComposer({
   }
 
   async function handleStoriesUpload() {
+    if (!allowStories && !allowGrid) return;
     if (!client || !session || !selectedClient) return;
     const clientScope = await validateSelectedClientScope();
     if (!clientScope.ok) return;
@@ -656,7 +661,7 @@ export default function useAdminInstagramComposer({
 
     const storage = createStorageAdapter();
     const dynamicUsername = (selectedClient?.slug || selectedClient?.name || '').trim();
-    const existingInstagramPosts = posts.filter((post) => parsePostType(post) === 'instagram');
+    const existingInstagramPosts = posts.filter((post) => parsePostType(post) === contentType);
     const existingFeedPosts = existingInstagramPosts.filter((post) => {
       const kind = instagramEntryMeta(post).kind;
       return kind !== 'story' && kind !== 'grid';
@@ -698,7 +703,7 @@ export default function useAdminInstagramComposer({
 
       const { data: publicData } = storage.getPublicUrl(path);
       const payload = {
-        title: makeTypedTitle('instagram', `STORY::${file.name}`),
+        title: makeTypedTitle(contentType, `STORY::${file.name}`),
         image_url: publicData.publicUrl,
         image_path: path,
         caption: '',
@@ -742,7 +747,7 @@ export default function useAdminInstagramComposer({
       }
       const { data: publicData } = storage.getPublicUrl(path);
       const payload = {
-        title: makeTypedTitle('instagram', `GRID9::${file.name}`),
+        title: makeTypedTitle(contentType, `GRID9::${file.name}`),
         image_url: publicData.publicUrl,
         image_path: path,
         caption: 'Έτσι θα διαμορφωθεί το Instagram feed σας μετά τη δημοσίευση όλων των posts.',
@@ -785,6 +790,8 @@ export default function useAdminInstagramComposer({
     plannedFeedPostCount,
     hasDraftSingleUploads,
     hasDraftCarouselUploads,
+    allowStories,
+    allowGrid,
     requiresLockedFeedOrder,
     hasPendingFeedChanges: hasDraftFeedItems || hasExistingFeedReorder,
     setDragActive,

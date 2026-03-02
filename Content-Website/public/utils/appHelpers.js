@@ -2,8 +2,16 @@ import { parseLogoStorySections } from './logoPreviewHelpers.js';
 
 const CONTENT_PREFIX = {
   instagram: '[IG]',
+  linkedin: '[LINKEDIN]',
   article: '[ARTICLE]',
   logo: '[LOGO]'
+};
+
+const CONTENT_TABS = {
+  instagram: 'FB & IG',
+  linkedin: 'LinkedIn',
+  article: 'Άρθρα',
+  logo: 'Logo Kit'
 };
 
 function getClientSlugFromUrl() {
@@ -14,6 +22,7 @@ function getClientSlugFromUrl() {
 function getPreviewModeFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const mode = params.get('mode') || 'instagram';
+  if (mode === 'linkedin') return 'linkedin';
   if (mode === 'article') return 'article';
   if (mode === 'logo') return 'logo';
   return 'instagram';
@@ -28,6 +37,7 @@ function getLogoProposalNumberFromUrl() {
 
 function parsePostType(post) {
   const value = `${post?.title || ''}`.trim();
+  if (value.startsWith(CONTENT_PREFIX.linkedin)) return 'linkedin';
   if (value.startsWith(CONTENT_PREFIX.article)) return 'article';
   if (value.startsWith(CONTENT_PREFIX.logo)) return 'logo';
   return 'instagram';
@@ -37,12 +47,13 @@ function stripPostTypePrefix(title) {
   const value = `${title || ''}`.trim();
   return value
     .replace(CONTENT_PREFIX.instagram, '')
+    .replace(CONTENT_PREFIX.linkedin, '')
     .replace(CONTENT_PREFIX.article, '')
     .replace(CONTENT_PREFIX.logo, '')
     .trim();
 }
 
-function parseInstagramPreviewMeta(post) {
+function parseSocialPreviewMeta(post) {
   const rawTitle = stripPostTypePrefix(post?.title || '');
   const parts = rawTitle.split('::');
   const marker = (parts[0] || '').trim().toUpperCase();
@@ -91,6 +102,10 @@ function parseInstagramPreviewMeta(post) {
   };
 }
 
+function parseInstagramPreviewMeta(post) {
+  return parseSocialPreviewMeta(post);
+}
+
 function isVideoPost(post) {
   const value = `${post?.image_url || ''} ${stripPostTypePrefix(post?.title || '')}`.toLowerCase();
   return ['.mp4', '.mov', '.webm', '.m4v'].some((ext) => value.includes(ext));
@@ -134,12 +149,14 @@ function parseLogoMetaStep(storySteps) {
 }
 
 export {
+  CONTENT_TABS,
   CONTENT_PREFIX,
   getClientSlugFromUrl,
   getPreviewModeFromUrl,
   getLogoProposalNumberFromUrl,
   parsePostType,
   stripPostTypePrefix,
+  parseSocialPreviewMeta,
   parseInstagramPreviewMeta,
   isVideoPost,
   postOrderLabel,
