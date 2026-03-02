@@ -111,7 +111,8 @@ function PostCard({
   previewMode,
   instagramKind = 'single',
   carouselSlides = [],
-  postIds = []
+  postIds = [],
+  reviewOnly = false
 }) {
   const fallback = previewMode === 'article' ? `Άρθρο ${index + 1}` : `Ανάρτηση ${index + 1}`;
   const [notes, setNotes] = useState('');
@@ -140,6 +141,7 @@ function PostCard({
   const articleTextareaRef = useRef(null);
 
   const isInstagramStory = previewMode === 'instagram' && instagramKind === 'story';
+  const isStorySectionReview = isInstagramStory && reviewOnly;
   const isInstagramCarousel = previewMode === 'instagram' && instagramKind === 'carousel';
   const targetPostIds = postIds.length > 0 ? postIds : [post.id];
   const activeSlides = isInstagramCarousel ?
@@ -413,7 +415,10 @@ function PostCard({
 
   async function handleSaveNotes() {
     if (noteMissing) return;
-    const ok = await onUpdateReview(targetPostIds, { client_notes: trimmedNotes }, 'Οι σημειώσεις αποθηκεύτηκαν.');
+    const saveMessage = isStorySectionReview
+      ? 'Οι σημειώσεις για τα stories αποθηκεύτηκαν.'
+      : 'Οι σημειώσεις αποθηκεύτηκαν.';
+    const ok = await onUpdateReview(targetPostIds, { client_notes: trimmedNotes }, saveMessage);
     if (!ok) return;
     onAppendHistory(post.id, trimmedNotes, 'Σημείωση');
     setNotes('');
@@ -427,6 +432,8 @@ function PostCard({
     const clientNotesValue = previewMode === 'article' ? articleValue : trimmedNotes || existingClientNotes;
     const successLabel = previewMode === 'article' ?
     nextStatus === 'approved' ? 'Το άρθρο εγκρίθηκε.' : 'Το άρθρο απορρίφθηκε.' :
+    isStorySectionReview ?
+    nextStatus === 'approved' ? 'Το section των stories εγκρίθηκε.' : 'Το section των stories απορρίφθηκε.' :
     nextStatus === 'approved' ? 'Η ανάρτηση εγκρίθηκε.' : 'Η ανάρτηση απορρίφθηκε.';
 
     const nextFeedbackFile = draftAttachmentFile || queuedAttachmentFile;
@@ -468,6 +475,8 @@ function PostCard({
     setDecisionNotice(
       previewMode === 'article' ?
       nextStatus === 'approved' ? 'Εγκρίνατε το άρθρο.' : 'Απορρίψατε το άρθρο.' :
+      isStorySectionReview ?
+      nextStatus === 'approved' ? 'Εγκρίνατε τα stories.' : 'Απορρίψατε τα stories.' :
       nextStatus === 'approved' ? 'Εγκρίνατε τη δημοσίευση.' : 'Απορρίψατε τη δημοσίευση.'
     );
   }
@@ -881,6 +890,67 @@ function PostCard({
     );
   }
 
+  function renderInstagramReviewSection() {
+    return React.createElement(ReviewSection, null, React.createElement(ReviewBox, null, React.createElement(ReviewHead, null, React.createElement("span", null, "Σημειώσεις πελάτη"), React.createElement(InlineAction, { type:
+
+
+
+
+      "button", onClick: () => setShowHistory((prev) => !prev), disabled: (historyEntries || []).length === 0 }, "Ιστορικό σημειώσεων")),
+
+
+
+    showHistory && (historyEntries || []).length > 0 && React.createElement(NotesHistory, null,
+
+    (historyEntries || []).map((entry) => React.createElement(NoteItem, { key:
+      entry.id }, React.createElement("small", null,
+    formatHistoryDateTime(entry.createdAt), " • ", entry.action), React.createElement(NoteText, null,
+    entry.text))
+
+    )),
+
+
+    notesOpen ? React.createElement(React.Fragment, null, React.createElement(Textarea_, { id:
+
+
+      `notes-${post.id}`, rows:
+      "3", value:
+      notes, onChange:
+      (event) => setNotes(event.target.value), placeholder:
+      isStorySectionReview ? "Γράψε γενικό σχόλιο για όλο το section των stories..." : "Γράψε σχόλιο για αυτή την ανάρτηση..." }), React.createElement(SaveRow, null, renderInlineFeedbackTools(), React.createElement(SaveNoteButton, { type:
+
+
+      "button", onClick: handleSaveNotes, disabled: pending || noteMissing }, "⌾ Αποθήκευση")), draftAudioPreviewUrl && React.createElement("audio", { controls: true, src: draftAudioPreviewUrl, style: { display: 'block', width: '100%', marginTop: 6, height: 32 } }), draftAudioFile && React.createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 } }, React.createElement("button", { type: "button", onClick: handleSendDraftAudio, disabled: pending || isRecordingAudio, style: getMiniActionStyle('confirm') }, "Αποστολή"), React.createElement("button", { type: "button", onClick: clearDraftAudio, disabled: pending || isRecordingAudio, style: getMiniActionStyle('danger') }, "Αφαίρεση"))) : React.createElement(React.Fragment, null, React.createElement(NoteCollapsed, { type:
+
+
+
+
+
+      "button", onClick: () => setNotesOpen(true) }, "+ Προσθήκη νέας σημείωσης")), React.createElement(DecisionRow, null,
+
+
+
+
+
+    !decisionLocked && React.createElement(DecisionButton, { type:
+      "button", $type: "approve", onClick: () => handleDecision('approved'), disabled: pending }, "✓ Έγκριση"),
+
+
+
+    !decisionLocked && React.createElement(DecisionButton, { type:
+      "button", $type: "decline", onClick: () => handleDecision('disapproved'), disabled: pending }, "✕ Απόρριψη"),
+
+
+
+    decisionLocked && React.createElement(DecisionButton, { type:
+      "button", onClick: () => setDecisionLocked(false), disabled: pending }, "Αλλαγή Απόφασης")),
+
+
+
+
+    decisionNotice && React.createElement(DecisionNotice, null, decisionNotice)));
+  }
+
   if (previewMode === 'article') {
     return React.createElement(BlogPost, { $loading:
       pending, $delay: `${Math.min(index * 45, 550)}ms` }, React.createElement(BlogContent, null, React.createElement(BlogTopRow, null,
@@ -975,6 +1045,17 @@ function PostCard({
 
   }
 
+  if (reviewOnly && previewMode === 'instagram') {
+    return React.createElement(React.Fragment, null, renderInstagramReviewSection(),
+
+
+
+    pending && React.createElement(LoadingOverlay, null, React.createElement(LoadingBadge, null, "Αποθήκευση..."))
+
+
+    );
+  }
+
   return React.createElement(Post, { $loading:
     pending, $delay: `${Math.min(index * 45, 550)}ms` }, React.createElement(PostHeader, null, React.createElement(Avatar, null), React.createElement("div", null, React.createElement("strong", null,
 
@@ -1029,66 +1110,7 @@ function PostCard({
     post.username, caption: post.caption })),
 
 
-
-  previewMode === 'instagram' && React.createElement(ReviewSection, null, React.createElement(ReviewBox, null, React.createElement(ReviewHead, null, React.createElement("span", null, "Σημειώσεις πελάτη"), React.createElement(InlineAction, { type:
-
-
-
-
-    "button", onClick: () => setShowHistory((prev) => !prev), disabled: (historyEntries || []).length === 0 }, "Ιστορικό σημειώσεων")),
-
-
-
-  showHistory && (historyEntries || []).length > 0 && React.createElement(NotesHistory, null,
-
-  (historyEntries || []).map((entry) => React.createElement(NoteItem, { key:
-    entry.id }, React.createElement("small", null,
-  formatHistoryDateTime(entry.createdAt), " • ", entry.action), React.createElement(NoteText, null,
-  entry.text))
-
-  )),
-
-
-  notesOpen ? React.createElement(React.Fragment, null, React.createElement(Textarea_, { id:
-
-
-    `notes-${post.id}`, rows:
-    "3", value:
-    notes, onChange:
-    (event) => setNotes(event.target.value), placeholder:
-    "Γράψε σχόλιο για αυτή την ανάρτηση..." }), React.createElement(SaveRow, null, renderInlineFeedbackTools(), React.createElement(SaveNoteButton, { type:
-
-
-    "button", onClick: handleSaveNotes, disabled: pending || noteMissing }, "⌾ Αποθήκευση")), draftAudioPreviewUrl && React.createElement("audio", { controls: true, src: draftAudioPreviewUrl, style: { display: 'block', width: '100%', marginTop: 6, height: 32 } }), draftAudioFile && React.createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 } }, React.createElement("button", { type: "button", onClick: handleSendDraftAudio, disabled: pending || isRecordingAudio, style: getMiniActionStyle('confirm') }, "Αποστολή"), React.createElement("button", { type: "button", onClick: clearDraftAudio, disabled: pending || isRecordingAudio, style: getMiniActionStyle('danger') }, "Αφαίρεση"))) : React.createElement(React.Fragment, null, React.createElement(NoteCollapsed, { type:
-
-
-
-
-
-
-    "button", onClick: () => setNotesOpen(true) }, "+ Προσθήκη νέας σημείωσης")), React.createElement(DecisionRow, null,
-
-
-
-
-
-  !decisionLocked && React.createElement(DecisionButton, { type:
-    "button", $type: "approve", onClick: () => handleDecision('approved'), disabled: pending }, "✓ Έγκριση"),
-
-
-
-  !decisionLocked && React.createElement(DecisionButton, { type:
-    "button", $type: "decline", onClick: () => handleDecision('disapproved'), disabled: pending }, "✕ Απόρριψη"),
-
-
-
-  decisionLocked && React.createElement(DecisionButton, { type:
-    "button", onClick: () => setDecisionLocked(false), disabled: pending }, "Αλλαγή Απόφασης")),
-
-
-
-
-  decisionNotice && React.createElement(DecisionNotice, null, decisionNotice))),
+  previewMode === 'instagram' && renderInstagramReviewSection(),
 
 
 

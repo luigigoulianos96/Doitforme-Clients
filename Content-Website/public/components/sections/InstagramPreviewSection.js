@@ -27,7 +27,39 @@ function InstagramPreviewSection({
   const selectedStorySafeIndex = storyItems.length > 0 ? Math.min(selectedStoryIndex, storyItems.length - 1) : -1;
   const isViewerOpen = viewerStoryIndex >= 0 && viewerStoryIndex < storyItems.length;
   const activeStoryIndex = isViewerOpen ? viewerStoryIndex : selectedStorySafeIndex;
-  const activeStoryItem = activeStoryIndex >= 0 ? storyItems[activeStoryIndex] : null;
+  const storyReviewItem = React.useMemo(() => {
+    if (storyItems.length === 0) return null;
+
+    const firstItem = storyItems[0];
+    const storyPostIds = storyItems.flatMap((item) => item.postIds || []).filter(Boolean);
+    const storyPosts = storyItems.map((item) => item.post).filter(Boolean);
+    const approvalStatuses = storyPosts.map((storyPost) => storyPost.approval_status || 'pending');
+    const hasDisapproved = approvalStatuses.includes('disapproved');
+    const hasPending = approvalStatuses.includes('pending');
+    const reviewStatus = hasDisapproved ? 'disapproved' : (hasPending ? 'pending' : 'approved');
+    const firstNotesPost = storyPosts.find((storyPost) => `${storyPost.client_notes || ''}`.trim().length > 0);
+    const firstFeedbackImagePost = storyPosts.find((storyPost) => storyPost.client_feedback_image_path || storyPost.client_feedback_image_url);
+    const firstFeedbackAudioPost = storyPosts.find((storyPost) => storyPost.client_feedback_audio_path || storyPost.client_feedback_audio_url);
+    const storyHistoryKey = 'instagram-stories-section';
+    const reviewPostId = storyPostIds.length > 0 ? storyPostIds.join('-') : `story-group-${firstItem.post?.id || 'section'}`;
+
+    return {
+      key: storyHistoryKey,
+      historyKey: storyHistoryKey,
+      savingKey: storyPostIds.length > 0 ? `group-${storyPostIds.join('-')}` : `${firstItem.savingKey || ''}`,
+      postIds: storyPostIds,
+      post: {
+        ...(firstItem.post || {}),
+        id: reviewPostId,
+        approval_status: reviewStatus,
+        client_notes: firstNotesPost?.client_notes || '',
+        client_feedback_image_url: firstFeedbackImagePost?.client_feedback_image_url || '',
+        client_feedback_image_path: firstFeedbackImagePost?.client_feedback_image_path || '',
+        client_feedback_audio_url: firstFeedbackAudioPost?.client_feedback_audio_url || '',
+        client_feedback_audio_path: firstFeedbackAudioPost?.client_feedback_audio_path || ''
+      }
+    };
+  }, [storyItems]);
   const activeViewerItem = isViewerOpen ? storyItems[viewerStoryIndex] : null;
   const activeViewerPost = activeViewerItem?.post || null;
   const viewerIsVideo = activeViewerPost ? isVideoPost(activeViewerPost) : false;
@@ -411,22 +443,23 @@ function InstagramPreviewSection({
                   )
                 )
               : null,
-            activeStoryItem
+            storyReviewItem
               ? React.createElement(
                   'div',
                   { style: { ...storiesPreviewFrameStyle, marginTop: '1rem' } },
                   React.createElement(PostCard, {
-                    key: `story-review-${activeStoryItem.key}`,
-                    post: activeStoryItem.post,
-                    postIds: activeStoryItem.postIds,
-                    instagramKind: activeStoryItem.kind,
-                    index: activeStoryIndex,
-                    pending: savingId === activeStoryItem.savingKey,
+                    key: `story-review-${storyReviewItem.key}`,
+                    post: storyReviewItem.post,
+                    postIds: storyReviewItem.postIds,
+                    instagramKind: 'story',
+                    index: 0,
+                    pending: savingId === storyReviewItem.savingKey,
                     onUpdateReview: updateReview,
-                    historyEntries: notesHistoryByPost[activeStoryItem.historyKey] || [],
-                    onAppendHistory: (postKey, text, action) => appendNoteHistory(activeStoryItem.historyKey, text, action),
+                    historyEntries: notesHistoryByPost[storyReviewItem.historyKey] || [],
+                    onAppendHistory: (postKey, text, action) => appendNoteHistory(storyReviewItem.historyKey, text, action),
                     previewMode,
-                    clientName: clientMeta?.name || ''
+                    clientName: clientMeta?.name || '',
+                    reviewOnly: true
                   })
                 )
               : null
