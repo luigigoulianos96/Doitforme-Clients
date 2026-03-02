@@ -679,6 +679,11 @@ function PostCard({
     const hasStoredAttachment = Boolean(post.client_feedback_image_path) && !removeStoredAttachment && !hideStoredAttachment;
     const currentAttachmentUrl = draftAttachmentPreviewUrl || (hasStoredAttachment ? post.client_feedback_image_url : '');
     const currentAttachmentLabel = draftAttachmentFile ? draftAttachmentFile.name : hasStoredAttachment ? t.storedAttachmentLabel : '';
+    const shouldRenderAttachmentControls = Boolean(currentAttachmentLabel || currentAttachmentUrl || attachmentError);
+
+    if (!shouldRenderAttachmentControls) {
+      return null;
+    }
 
     return React.createElement(
       'div',
@@ -816,6 +821,11 @@ function PostCard({
       hasStoredAudio ?
       getFileNameFromPath(post.client_feedback_audio_path) || t.storedAudioLabel :
       '';
+    const shouldRenderAudioControls = Boolean(currentAudioLabel || draftAudioPreviewUrl || audioError);
+
+    if (!shouldRenderAudioControls) {
+      return null;
+    }
 
     return React.createElement(
       'div',
