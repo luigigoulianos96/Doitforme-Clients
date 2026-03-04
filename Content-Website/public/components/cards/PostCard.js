@@ -28,7 +28,6 @@ import {
   ReviewSection,
   ReviewBox,
   ArticleEditWrap,
-  ArticleEditTextarea,
   ReviewHead,
   InlineAction,
   NotesHistory,
@@ -46,6 +45,8 @@ import {
 import { formatHistoryDateTime } from '../../hooks/useNotesHistory.js';
 import { stripPostTypePrefix, isVideoPost, postOrderLabel } from '../../utils/appHelpers.js';
 import { getPreviewText } from '../../utils/previewText.js';
+import RichTextEditor, { RichTextPreview } from '../RichTextEditor.js';
+import { extractRichTextPlainText, hasRichTextContent, normalizeRichTextHtml } from '../../utils/richText.js';
 
 const ACCEPTED_FEEDBACK_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const ACCEPTED_FEEDBACK_AUDIO_TYPES = [
@@ -189,8 +190,6 @@ function PostCard({
   const audioRecorderRef = useRef(null);
   const audioStreamRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const articleTextareaRef = useRef(null);
-
   const isInstagramStory = previewMode === 'instagram' && instagramKind === 'story';
   const isStorySectionReview = isInstagramStory && reviewOnly;
   const isInstagramCarousel = isSocialPreview && instagramKind === 'carousel';
@@ -252,25 +251,9 @@ function PostCard({
   }, [draftAttachmentFile]);
 
   useEffect(() => {
-    const nextText = `${post.client_notes || post.caption || ''}`.trim();
+    const nextText = normalizeRichTextHtml(`${post.client_notes || post.caption || ''}`.trim());
     setArticleText(nextText);
   }, [post.client_notes, post.caption]);
-
-  useEffect(() => {
-    if (previewMode !== 'article') return;
-    const textarea = articleTextareaRef.current;
-    if (!textarea) return;
-
-    const collapsedHeight = '18rem';
-
-    if (!articleEditorExpanded) {
-      textarea.style.height = collapsedHeight;
-      return;
-    }
-
-    textarea.style.height = 'auto';
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  }, [articleEditorExpanded, articleText, previewMode]);
 
   useEffect(() => {
     if (!draftAudioFile) {
@@ -492,9 +475,10 @@ function PostCard({
   }
 
   async function handleDecision(nextStatus) {
-    const articleValue = articleText.trim();
-    const previousArticleText = `${post.client_notes || post.caption || ''}`.trim();
-    const existingClientNotes = `${post.client_notes || ''}`.trim();
+    const articleValue = normalizeRichTextHtml(articleText);
+    const previousArticleValue = normalizeRichTextHtml(`${post.client_notes || post.caption || ''}`.trim());
+    const previousArticleText = extractRichTextPlainText(previousArticleValue);
+    const existingClientNotes = normalizeRichTextHtml(`${post.client_notes || ''}`.trim());
     const clientNotesValue = previewMode === 'article' ? articleValue : trimmedNotes || existingClientNotes;
     const successLabel = previewMode === 'article' ?
     nextStatus === 'approved' ? t.articleApproved : t.articleRejected :
@@ -523,8 +507,9 @@ function PostCard({
     if (nextFeedbackFile && !queuedAttachmentName) {
       onAppendHistory(post.id, nextFeedbackFile.name, t.attachment);
     }
-    const articleDecisionHistoryValue = articleValue !== previousArticleText
-      ? { beforeText: previousArticleText, afterText: articleValue }
+    const nextArticleText = extractRichTextPlainText(articleValue);
+    const articleDecisionHistoryValue = nextArticleText !== previousArticleText
+      ? { beforeText: previousArticleText, afterText: nextArticleText }
       : t.noTextChange;
     onAppendHistory(
       post.id,
@@ -548,12 +533,14 @@ function PostCard({
   }
 
   async function handleArticleSave() {
-    const nextText = articleText.trim();
-    if (!nextText) return;
-    const previousText = `${post.client_notes || post.caption || ''}`.trim();
+    const nextHtml = normalizeRichTextHtml(articleText);
+    if (!hasRichTextContent(nextHtml)) return;
+    const previousHtml = normalizeRichTextHtml(`${post.client_notes || post.caption || ''}`.trim());
+    const previousText = extractRichTextPlainText(previousHtml);
+    const nextText = extractRichTextPlainText(nextHtml);
     const ok = await onUpdateReview(
       post.id,
-      { client_notes: nextText, approval_status: 'pending' },
+      { client_notes: nextHtml, approval_status: 'pending' },
       t.articleChangesSaved
     );
     if (!ok) return;
@@ -1062,24 +1049,19 @@ function PostCard({
 
 
     )),
-    React.createElement(ArticleEditTextarea, { ref:
-
-
-      articleTextareaRef, $expanded:
-
-
-      articleEditorExpanded, rows:
-
-
-      "16", value:
+    React.createElement(RichTextEditor, { value:
       articleText, onChange:
-      (event) => setArticleText(event.target.value), onClick:
+      (nextHtml) => setArticleText(nextHtml), onFocus:
       () => setArticleEditorExpanded(true), onBlur:
       () => setArticleEditorExpanded(false), placeholder:
-      t.articlePlaceholder }), React.createElement(SaveRow, null, renderInlineFeedbackTools(), React.createElement(SaveNoteButton, { type:
+      t.articlePlaceholder, minHeight:
+      articleEditorExpanded ? '28.75rem' : '18rem' }), React.createElement(RichTextPreview, { value:
+      articleText, emptyLabel:
+      t.articlePlaceholder, style:
+      { marginTop: '0.1rem' } }), React.createElement(SaveRow, null, renderInlineFeedbackTools(), React.createElement(SaveNoteButton, { type:
 
 
-      "button", onClick: handleArticleSave, disabled: pending || articleText.trim().length === 0 }, t.saveArticleChange)), renderFeedbackAttachmentControls(), renderFeedbackAudioControls(), React.createElement(DecisionRow, null,
+      "button", onClick: handleArticleSave, disabled: pending || !hasRichTextContent(articleText) }, t.saveArticleChange)), renderFeedbackAttachmentControls(), renderFeedbackAudioControls(), React.createElement(DecisionRow, null,
 
 
 

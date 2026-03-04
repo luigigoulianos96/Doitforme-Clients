@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { extractRichTextPlainText } from '../utils/richText.js';
 
 const NOTES_HISTORY_KEY = 'gymway_notes_history_v1';
 
@@ -34,7 +35,7 @@ function writeNotesHistory(storageKey, value) {
 }
 
 function parseParagraphs(text) {
-  return `${text || ''}`
+  return extractRichTextPlainText(text)
     .split(/\n\s*\n/g)
     .map((item) => item.trim())
     .filter(Boolean);

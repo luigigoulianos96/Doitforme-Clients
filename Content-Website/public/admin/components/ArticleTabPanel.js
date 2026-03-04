@@ -1,5 +1,7 @@
 import React from 'react';
 import CollapsiblePanel from './CollapsiblePanel.js';
+import RichTextEditor, { RichTextPreview } from '../../components/RichTextEditor.js';
+import { hasRichTextContent } from '../../utils/richText.js';
 
 const h = React.createElement;
 
@@ -203,7 +205,7 @@ export default function ArticleTabPanel({
   }
 
   function renderDraftCard(draft, label) {
-    const isReady = draft.title.trim().length > 0 && draft.body.trim().length > 0;
+    const isReady = draft.title.trim().length > 0 && hasRichTextContent(draft.body);
 
     return h(
       'section',
@@ -229,13 +231,17 @@ export default function ArticleTabPanel({
         'label',
         null,
         'Κείμενο',
-        h(CaptionInput, {
-          rows: '8',
+        h(RichTextEditor, {
           value: draft.body,
-          onChange: (event) => updateArticleDraftField(draft.id, 'body', event.target.value),
-          placeholder: 'Γράψε το κείμενο που θα εγκρίνει ο πελάτης'
+          onChange: (nextHtml) => updateArticleDraftField(draft.id, 'body', nextHtml),
+          placeholder: 'Γράψε το κείμενο που θα εγκρίνει ο πελάτης',
+          minHeight: '16rem'
         })
       ),
+      h(RichTextPreview, {
+        value: draft.body,
+        emptyLabel: 'Το preview του κειμένου θα εμφανιστεί εδώ.'
+      }),
       h(
         'div',
         { style: pickerRowStyle },

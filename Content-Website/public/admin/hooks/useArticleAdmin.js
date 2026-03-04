@@ -1,4 +1,9 @@
 import { useEffect, useState } from 'react';
+import {
+  buildRichTextFromParagraphs,
+  hasRichTextContent,
+  normalizeRichTextHtml
+} from '../../utils/richText.js';
 
 function createEmptyArticleDraft(id) {
   return { id, title: '', body: '', imageFile: null, imagePreview: '' };
@@ -91,22 +96,46 @@ async function readDocxParagraphs(file) {
   const parser = new DOMParser();
   const xml = parser.parseFromString(xmlText, 'application/xml');
   const paragraphs = Array.from(xml.getElementsByTagName('w:p')).map((paragraph) =>
-    Array.from(paragraph.getElementsByTagName('w:t'))
+    `${paragraph.getElementsByTagName('w:numPr').length > 0 ? '• ' : ''}${Array.from(paragraph.getElementsByTagName('w:t'))
       .map((node) => node.textContent || '')
-      .join('')
+      .join('')}`
   );
 
   return normalizeParagraphs(paragraphs);
 }
 
-function readHtmlParagraphs(text) {
+function readHtmlDraft(text) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(text, 'text/html');
-  const paragraphs = Array.from(doc.querySelectorAll('h1, h2, h3, p, li'))
-    .map((node) => node.textContent || '');
+  const blocks = Array.from(doc.body?.querySelectorAll('h1, h2, h3, p, li, ul, ol') || []);
 
-  if (paragraphs.length > 0) return normalizeParagraphs(paragraphs);
-  return normalizeParagraphs([(doc.body?.textContent || doc.documentElement?.textContent || '')]);
+  if (blocks.length === 0) {
+    const fallbackText = (doc.body?.textContent || doc.documentElement?.textContent || '').trim();
+    return {
+      title: fallbackText,
+      body: normalizeRichTextHtml(fallbackText)
+    };
+  }
+
+  const title = (blocks[0].textContent || '').trim();
+  const bodySource = blocks.slice(1).map((node) => node.outerHTML).join('') || blocks[0].outerHTML;
+
+  return {
+    title,
+    body: normalizeRichTextHtml(bodySource)
+  };
+}
+
+function readHtmlParagraphs(text) {
+  const draft = readHtmlDraft(text);
+  const plainBody = `${draft.title}\n\n${draft.body}`
+    .replace(/\r/g, '');
+
+  return normalizeParagraphs(
+    plainBody
+      .replace(/<[^>]+>/g, '\n')
+      .split(/\n+/)
+  );
 }
 
 function readRtfParagraphs(text) {
@@ -145,6 +174,19 @@ async function readDocumentParagraphs(file) {
 }
 
 async function parseArticleDocument(file) {
+  const lowerName = (file.name || '').toLowerCase();
+
+  if (lowerName.endsWith('.html') || lowerName.endsWith('.htm')) {
+    const text = await file.text();
+    const htmlDraft = readHtmlDraft(text);
+
+    if (!htmlDraft.title || !hasRichTextContent(htmlDraft.body)) {
+      throw new Error('Το αρχείο δεν περιέχει αναγνώσιμο κείμενο.');
+    }
+
+    return htmlDraft;
+  }
+
   const paragraphs = await readDocumentParagraphs(file);
 
   if (paragraphs.length === 0) {
@@ -152,7 +194,7 @@ async function parseArticleDocument(file) {
   }
 
   const title = paragraphs[0];
-  const body = paragraphs.length > 1 ? paragraphs.slice(1).join('\n\n') : paragraphs[0];
+  const body = buildRichTextFromParagraphs(paragraphs.length > 1 ? paragraphs.slice(1) : [paragraphs[0]]);
 
   return { title, body };
 }
@@ -177,7 +219,7 @@ export default function useArticleAdmin({
     primaryDraft: null,
     queuedDrafts: articleDrafts,
     readyDraftCount: articleDrafts.filter(
-      (draft) => draft.title.trim().length > 0 && draft.body.trim().length > 0
+      (draft) => draft.title.trim().length > 0 && hasRichTextContent(draft.body)
     ).length
   };
 
@@ -197,8 +239,9 @@ export default function useArticleAdmin({
   }
 
   function updateArticleDraftField(draftId, field, value) {
+    const nextValue = field === 'body' ? normalizeRichTextHtml(value) : value;
     setArticleDrafts((prev) =>
-      prev.map((draft) => (draft.id === draftId ? { ...draft, [field]: value } : draft))
+      prev.map((draft) => (draft.id === draftId ? { ...draft, [field]: nextValue } : draft))
     );
   }
 
@@ -283,8 +326,12 @@ export default function useArticleAdmin({
     if (!clientScope.ok) return;
 
     const readyDrafts = articleDrafts
-      .map((draft) => ({ ...draft, title: draft.title.trim(), body: draft.body.trim() }))
-      .filter((draft) => draft.title.length > 0 && draft.body.length > 0);
+      .map((draft) => ({
+        ...draft,
+        title: draft.title.trim(),
+        body: normalizeRichTextHtml(draft.body)
+      }))
+      .filter((draft) => draft.title.length > 0 && hasRichTextContent(draft.body));
 
     if (readyDrafts.length === 0) {
       setStatus('Συμπλήρωσε τίτλο και κείμενο σε τουλάχιστον 1 άρθρο πριν τη δημοσίευση.');
