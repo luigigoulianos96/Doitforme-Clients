@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   buildRichTextFromParagraphs,
   hasRichTextContent,
@@ -213,6 +213,7 @@ export default function useArticleAdmin({
   makeTypedTitle
 }) {
   const [articleDrafts, setArticleDrafts] = useState([]);
+  const publishingRef = useRef(false);
 
   const composerState = {
     drafts: articleDrafts,
@@ -321,78 +322,87 @@ export default function useArticleAdmin({
   }
 
   async function publishArticles() {
+    if (publishingRef.current) return;
     if (!client || !session || !selectedClient) return;
-    const clientScope = await validateSelectedClientScope();
-    if (!clientScope.ok) return;
+    publishingRef.current = true;
+    try {
+      const clientScope = await validateSelectedClientScope();
+      if (!clientScope.ok) return;
 
-    const readyDrafts = articleDrafts
-      .map((draft) => ({
-        ...draft,
-        title: draft.title.trim(),
-        body: normalizeRichTextHtml(draft.body)
-      }))
-      .filter((draft) => draft.title.length > 0 && hasRichTextContent(draft.body));
+      const readyDrafts = articleDrafts
+        .map((draft) => ({
+          ...draft,
+          title: draft.title.trim(),
+          body: normalizeRichTextHtml(draft.body)
+        }))
+        .filter((draft) => draft.title.length > 0 && hasRichTextContent(draft.body));
 
-    if (readyDrafts.length === 0) {
-      setStatus('Συμπλήρωσε τίτλο και κείμενο σε τουλάχιστον 1 άρθρο πριν τη δημοσίευση.');
-      return;
-    }
+      if (readyDrafts.length === 0) {
+        setStatus('Συμπλήρωσε τίτλο και κείμενο σε τουλάχιστον 1 άρθρο πριν τη δημοσίευση.');
+        return;
+      }
 
-    setBusy(true);
-    setStatus('Γίνεται ανέβασμα άρθρων...');
-    const storage = createStorageAdapter();
-    const highestSortOrder = posts.reduce((max, post) => Math.max(max, post.sort_order || 0), 0);
+      setBusy(true);
+      setStatus('Γίνεται ανέβασμα άρθρων...');
+      const storage = createStorageAdapter();
+      const highestSortOrder = posts.reduce((max, post) => Math.max(max, post.sort_order || 0), 0);
 
-    for (let i = 0; i < readyDrafts.length; i += 1) {
-      const draft = readyDrafts[i];
-      let imagePath = '';
-      let imageUrl = '';
+      for (let i = 0; i < readyDrafts.length; i += 1) {
+        const draft = readyDrafts[i];
+        let imagePath = '';
+        let imageUrl = '';
 
-      if (draft.imageFile) {
-        const fileName = `${Date.now()}-article-${i}-${slugFilename(draft.imageFile.name)}`;
-        const path = `${session.user.id}/${fileName}`;
-        const { error: uploadError } = await storage.upload(path, draft.imageFile, { cacheControl: '3600', upsert: false });
+        if (draft.imageFile) {
+          const fileName = `${Date.now()}-article-${i}-${slugFilename(draft.imageFile.name)}`;
+          const path = `${session.user.id}/${fileName}`;
+          const { error: uploadError } = await storage.upload(path, draft.imageFile, { cacheControl: '3600', upsert: false });
 
-        if (uploadError) {
-          setStatus(`Σφάλμα upload άρθρου (${draft.title}): ${uploadError.message}`);
+          if (uploadError) {
+            setStatus(`Σφάλμα upload άρθρου (${draft.title}): ${uploadError.message}`);
+            setBusy(false);
+            return;
+          }
+
+          const { data: publicData } = storage.getPublicUrl(path);
+          imagePath = path;
+          imageUrl = publicData.publicUrl;
+        }
+
+        const payload = {
+          title: makeTypedTitle('article', draft.title),
+          caption: draft.body,
+          image_url: imageUrl,
+          image_path: imagePath,
+          client_id: clientScope.value.id,
+          status: 'published',
+          approval_status: 'pending',
+          client_notes: '',
+          username: 'content.writer',
+          like_count: 0,
+          sort_order: highestSortOrder + i + 1
+        };
+
+        const { error: insertError } = await client.from('posts').insert(payload);
+        if (insertError) {
+          setStatus(`Σφάλμα βάσης άρθρου (${draft.title}): ${insertError.message}`);
           setBusy(false);
           return;
         }
-
-        const { data: publicData } = storage.getPublicUrl(path);
-        imagePath = path;
-        imageUrl = publicData.publicUrl;
       }
 
-      const payload = {
-        title: makeTypedTitle('article', draft.title),
-        caption: draft.body,
-        image_url: imageUrl,
-        image_path: imagePath,
-        client_id: clientScope.value.id,
-        status: 'published',
-        approval_status: 'pending',
-        client_notes: '',
-        username: 'content.writer',
-        like_count: 0,
-        sort_order: highestSortOrder + i + 1
-      };
-
-      const { error: insertError } = await client.from('posts').insert(payload);
-      if (insertError) {
-        setStatus(`Σφάλμα βάσης άρθρου (${draft.title}): ${insertError.message}`);
-        setBusy(false);
-        return;
-      }
+      articleDrafts.forEach((draft) => {
+        if (draft.imagePreview) URL.revokeObjectURL(draft.imagePreview);
+      });
+      setArticleDrafts([]);
+      setStatus(`Ολοκληρώθηκε. Δημοσιεύτηκαν ${readyDrafts.length} άρθρα.`);
+      await loadPosts();
+      setBusy(false);
+    } catch (error) {
+      setBusy(false);
+      setStatus(error instanceof Error ? error.message : 'Παρουσιάστηκε σφάλμα κατά τη δημοσίευση άρθρων.');
+    } finally {
+      publishingRef.current = false;
     }
-
-    articleDrafts.forEach((draft) => {
-      if (draft.imagePreview) URL.revokeObjectURL(draft.imagePreview);
-    });
-    setArticleDrafts([]);
-    setStatus(`Ολοκληρώθηκε. Δημοσιεύτηκαν ${readyDrafts.length} άρθρα.`);
-    await loadPosts();
-    setBusy(false);
   }
 
   return {

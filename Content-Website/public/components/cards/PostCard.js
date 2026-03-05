@@ -45,7 +45,7 @@ import {
 import { formatHistoryDateTime } from '../../hooks/useNotesHistory.js';
 import { stripPostTypePrefix, isVideoPost, postOrderLabel } from '../../utils/appHelpers.js';
 import { getPreviewText } from '../../utils/previewText.js';
-import RichTextEditor, { RichTextPreview } from '../RichTextEditor.js';
+import RichTextEditor from '../RichTextEditor.js';
 import { extractRichTextPlainText, hasRichTextContent, normalizeRichTextHtml } from '../../utils/richText.js';
 
 const ACCEPTED_FEEDBACK_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -1055,10 +1055,9 @@ function PostCard({
       () => setArticleEditorExpanded(true), onBlur:
       () => setArticleEditorExpanded(false), placeholder:
       t.articlePlaceholder, minHeight:
-      articleEditorExpanded ? '28.75rem' : '18rem' }), React.createElement(RichTextPreview, { value:
-      articleText, emptyLabel:
-      t.articlePlaceholder, style:
-      { marginTop: '0.1rem' } }), React.createElement(SaveRow, null, renderInlineFeedbackTools(), React.createElement(SaveNoteButton, { type:
+      '28.75rem', collapsedHeight:
+      '18rem', expanded:
+      articleEditorExpanded }), React.createElement(SaveRow, null, renderInlineFeedbackTools(), React.createElement(SaveNoteButton, { type:
 
 
       "button", onClick: handleArticleSave, disabled: pending || !hasRichTextContent(articleText) }, t.saveArticleChange)), renderFeedbackAttachmentControls(), renderFeedbackAudioControls(), React.createElement(DecisionRow, null,

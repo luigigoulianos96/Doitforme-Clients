@@ -1,6 +1,6 @@
 import React from 'react';
 import CollapsiblePanel from './CollapsiblePanel.js';
-import RichTextEditor, { RichTextPreview } from '../../components/RichTextEditor.js';
+import RichTextEditor from '../../components/RichTextEditor.js';
 import { hasRichTextContent } from '../../utils/richText.js';
 
 const h = React.createElement;
@@ -238,10 +238,6 @@ export default function ArticleTabPanel({
           minHeight: '16rem'
         })
       ),
-      h(RichTextPreview, {
-        value: draft.body,
-        emptyLabel: 'Το preview του κειμένου θα εμφανιστεί εδώ.'
-      }),
       h(
         'div',
         { style: pickerRowStyle },

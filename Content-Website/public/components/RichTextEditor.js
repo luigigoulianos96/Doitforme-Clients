@@ -8,11 +8,14 @@ function RichTextEditor({
   onChange,
   placeholder = '',
   minHeight = '12rem',
+  collapsedHeight = minHeight,
+  expanded = true,
   style = {},
   onFocus,
   onBlur
 }) {
   const surfaceRef = React.useRef(null);
+  const [focused, setFocused] = React.useState(false);
 
   React.useEffect(() => {
     const surface = surfaceRef.current;
@@ -35,8 +38,16 @@ function RichTextEditor({
 
   function handleBlur(event) {
     syncValue();
+    setFocused(false);
     if (onBlur) {
       onBlur(event);
+    }
+  }
+
+  function handleFocus(event) {
+    setFocused(true);
+    if (onFocus) {
+      onFocus(event);
     }
   }
 
@@ -46,8 +57,9 @@ function RichTextEditor({
 
   const surfaceStyle = {
     width: '100%',
-    minHeight,
-    border: '1px solid color-mix(in srgb, var(--greyDark) 30%, transparent)',
+    minHeight: expanded ? minHeight : collapsedHeight,
+    height: expanded ? 'auto' : collapsedHeight,
+    border: `1px solid ${focused ? 'color-mix(in srgb, var(--focus) 55%, var(--greyDark))' : 'color-mix(in srgb, var(--greyDark) 30%, transparent)'}`,
     borderRadius: '0.9rem',
     background: 'color-mix(in srgb, var(--white) 98%, transparent)',
     color: 'color-mix(in srgb, var(--dark) 90%, var(--greyDark))',
@@ -55,8 +67,10 @@ function RichTextEditor({
     fontSize: '1.6rem',
     lineHeight: 1.55,
     padding: '0.9rem',
-    overflow: 'auto',
+    overflowY: expanded ? 'visible' : 'auto',
+    boxShadow: focused ? '0 0 0 4px color-mix(in srgb, var(--focus) 12%, transparent)' : 'none',
     outline: 'none',
+    transition: 'border-color 180ms ease, box-shadow 180ms ease',
     ...style
   };
 
@@ -90,7 +104,7 @@ function RichTextEditor({
       style: surfaceStyle,
       onInput: syncValue,
       onPaste: () => window.setTimeout(syncValue, 0),
-      onFocus,
+      onFocus: handleFocus,
       onBlur: handleBlur
     })
   );
