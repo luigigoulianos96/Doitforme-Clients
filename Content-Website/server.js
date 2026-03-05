@@ -206,9 +206,15 @@ const resolve_local_path = (requestPath) => {
     '/': '/public/portal.html',
     '/portal': '/public/portal.html',
     '/portal.html': '/public/portal.html',
+    '/ideas-admin': '/public/ideas-admin.html',
+    '/ideas-admin.html': '/public/ideas-admin.html',
+    '/ideas-review': '/public/ideas-review.html',
+    '/ideas-review.html': '/public/ideas-review.html',
     '/portal.js': '/public/portal.js',
     '/app.js': '/public/app.js',
     '/admin.js': '/public/admin.js',
+    '/ideas-admin.js': '/public/ideas-admin.js',
+    '/ideas-review.js': '/public/ideas-review.js',
     '/config.js': '/public/config.js',
     '/service-worker.js': '/public/service-worker.js',
     '/service-worker-icon.svg': '/public/service-worker-icon.svg',
@@ -223,6 +229,7 @@ const resolve_local_path = (requestPath) => {
     ['/components/', '/public/components/'],
     ['/core/', '/public/core/'],
     ['/hooks/', '/public/hooks/'],
+    ['/ideas/', '/public/ideas/'],
     ['/services/', '/public/services/'],
     ['/utils/', '/public/utils/']
   ];
@@ -297,6 +304,8 @@ server.listen(PORT, () => {
   console.log(`Portal page: http://localhost:${PORT}/public/portal.html`);
   console.log(`Public page: http://localhost:${PORT}/public/index.html`);
   console.log(`Admin page: http://localhost:${PORT}/public/admin.html`);
+  console.log(`Ideas admin page: http://localhost:${PORT}/public/ideas-admin.html`);
+  console.log(`Ideas preview page: http://localhost:${PORT}/public/ideas-review.html`);
   console.log(`Storage upload endpoint: http://localhost:${PORT}${STORAGE_UPLOAD_ROUTE}`);
   console.log(`Storage delete endpoint: http://localhost:${PORT}${STORAGE_DELETE_ROUTE}`);
   console.log(`Push subscribe endpoint: http://localhost:${PORT}${PUSH_SUBSCRIBE_ROUTE}`);

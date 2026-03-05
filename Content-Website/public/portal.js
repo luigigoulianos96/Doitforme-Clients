@@ -629,7 +629,10 @@ function PortalApp() {
                 </p>
                 <Actions>
                   <Button $primary type="button" onClick={() => { window.location.href = `./admin.html?client=${encodeURIComponent(feedClient.slug)}`; }}>
-                    Άνοιγμα Admin
+                    Content Admin
+                  </Button>
+                  <Button type="button" onClick={() => { window.location.href = `./ideas-admin.html?client=${encodeURIComponent(feedClient.slug)}`; }}>
+                    Ideas Admin
                   </Button>
                   <Button $danger type="button" disabled={busy} onClick={() => deleteClientFeed(feedClient)}>
                     Διαγραφή Client

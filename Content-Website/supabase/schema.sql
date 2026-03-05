@@ -211,3 +211,76 @@ on public.web_push_subscriptions
 for all
 using (false)
 with check (false);
+
+create table if not exists public.content_ideas (
+  id bigint generated always as identity primary key,
+  client_id uuid not null references public.clients(id) on delete cascade,
+  title text not null,
+  analysis text not null default '',
+  requirements text not null default '',
+  inspiration_links jsonb not null default '[]'::jsonb,
+  status text not null default 'draft' check (status in ('draft', 'published')),
+  approval_status text not null default 'pending' check (approval_status in ('pending', 'approved', 'disapproved')),
+  client_notes text not null default '',
+  client_feedback_image_url text not null default '',
+  client_feedback_image_path text not null default '',
+  client_feedback_audio_url text not null default '',
+  client_feedback_audio_path text not null default '',
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by uuid references auth.users(id)
+);
+
+alter table public.content_ideas
+  add column if not exists client_feedback_image_url text not null default '',
+  add column if not exists client_feedback_image_path text not null default '',
+  add column if not exists client_feedback_audio_url text not null default '',
+  add column if not exists client_feedback_audio_path text not null default '';
+
+create index if not exists content_ideas_client_sort_idx
+  on public.content_ideas(client_id, status, sort_order, created_at desc);
+
+create index if not exists content_ideas_client_approval_idx
+  on public.content_ideas(client_id, approval_status, updated_at desc);
+
+alter table public.content_ideas enable row level security;
+
+drop policy if exists "Public can read published ideas" on public.content_ideas;
+create policy "Public can read published ideas"
+on public.content_ideas
+for select
+using (status = 'published');
+
+grant update (
+  approval_status,
+  client_notes,
+  client_feedback_image_url,
+  client_feedback_image_path,
+  client_feedback_audio_url,
+  client_feedback_audio_path
+) on public.content_ideas to anon, authenticated;
+
+drop policy if exists "Public can submit approvals on published ideas" on public.content_ideas;
+create policy "Public can submit approvals on published ideas"
+on public.content_ideas
+for update
+using (status = 'published')
+with check (status = 'published');
+
+drop policy if exists "Admin full access ideas" on public.content_ideas;
+create policy "Admin full access ideas"
+on public.content_ideas
+for all
+using (
+  exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.is_admin = true
+  )
+)
+with check (
+  exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.is_admin = true
+  )
+);
