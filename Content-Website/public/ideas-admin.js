@@ -546,6 +546,12 @@ function IdeasAdminApp() {
     await saveIdeaEdits(ideaId, draft);
   }
 
+  function openContentAdmin() {
+    const targetSlug = selectedClient?.slug || clientSlug;
+    if (!targetSlug) return;
+    window.location.href = `./admin.html?client=${encodeURIComponent(targetSlug)}`;
+  }
+
   if (configError) {
     return (
       <>
@@ -618,6 +624,9 @@ function IdeasAdminApp() {
         <Hero>
           <HeroTop>
             <ActionButton type="button" onClick={() => { window.location.href = './portal.html'; }}>Portal</ActionButton>
+            <ActionButton type="button" disabled={!selectedClient?.slug && !clientSlug} onClick={openContentAdmin}>
+              Admin Content
+            </ActionButton>
             <ActionButton type="button" onClick={signOut}>Αποσύνδεση</ActionButton>
           </HeroTop>
           <Title>Ideas Admin: {selectedClient?.name || 'Client'}</Title>
