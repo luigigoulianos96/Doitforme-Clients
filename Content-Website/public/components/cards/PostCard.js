@@ -79,6 +79,12 @@ function getFileNameFromPath(value) {
   return parts[parts.length - 1] || pathValue;
 }
 
+function normalizeInstagramDisplayName(value) {
+  const source = `${value || ''}`.trim();
+  if (!source) return '';
+  return source.replace(/-\d{3,}$/g, '');
+}
+
 function CaptionBlock({ username, caption, copy }) {
   const [expanded, setExpanded] = useState(false);
   const finalCaption = (caption || (copy?.isEnglish ? 'Caption pending...' : 'Η λεζάντα εκκρεμεί...')).trim();
@@ -166,6 +172,9 @@ function PostCard({
   const fallback = previewMode === 'article' ? `${t.articleFallbackLabel} ${index + 1}` : `${t.postFallbackLabel} ${index + 1}`;
   const isLinkedIn = previewMode === 'linkedin';
   const isSocialPreview = previewMode === 'instagram' || isLinkedIn;
+  const displayUsername = previewMode === 'instagram'
+    ? normalizeInstagramDisplayName(clientName || post.username || '')
+    : (clientName || post.username || '');
   const [notes, setNotes] = useState('');
   const [articleText, setArticleText] = useState('');
   const [showHistory, setShowHistory] = useState(false);
@@ -1386,7 +1395,7 @@ function PostCard({
 
 
 
-  clientName || post.username || '', React.createElement(OrderBadge, null,
+  displayUsername || '', React.createElement(OrderBadge, null,
   postOrderLabel(post, index)))), React.createElement(Menu, null, isLinkedIn ? 'in' : "...")), React.createElement(Media, { role:
 
 
@@ -1431,7 +1440,7 @@ function PostCard({
 
   !isInstagramStory && React.createElement(PostBody, null, React.createElement(CaptionBlock, { username:
 
-    post.username, caption: post.caption, copy: t })),
+    displayUsername, caption: post.caption, copy: t })),
 
 
   isSocialPreview && renderInstagramReviewSection(),

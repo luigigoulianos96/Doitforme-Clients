@@ -153,7 +153,9 @@ function useIdeasAdminData(clientSlug) {
       analysis: `${draft?.analysis || ''}`.trim(),
       requirements: `${draft?.requirements || ''}`.trim(),
       inspiration_links: parseLinksText(draft?.linksText || ''),
-      status: `${draft?.status || 'published'}`.trim() === 'draft' ? 'draft' : 'published'
+      status: `${draft?.status || 'published'}`.trim() === 'draft' ? 'draft' : 'published',
+      approval_status: 'pending',
+      client_notes: ''
     };
 
     const { data, error } = await updateIdea(client, ideaId, payload);
@@ -164,7 +166,7 @@ function useIdeasAdminData(clientSlug) {
     }
 
     setIdeas((prev) => prev.map((idea) => (idea.id === ideaId ? normalizeIdeaRow(data) : idea)));
-    setStatus('Οι αλλαγές αποθηκεύτηκαν.');
+    setStatus('Οι αλλαγές αποθηκεύτηκαν και η ιδέα γύρισε σε αναμονή νέας έγκρισης.');
     setSavingId(null);
   }
 

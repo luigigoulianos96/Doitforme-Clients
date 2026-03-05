@@ -1411,7 +1411,9 @@ function AdminApp() {
         caption: nextCaption,
         title: nextTitle,
         image_url: nextImageUrl,
-        image_path: nextImagePath
+        image_path: nextImagePath,
+        approval_status: 'pending',
+        client_notes: ''
       })
       .eq('id', post.id);
 
@@ -1495,7 +1497,7 @@ function AdminApp() {
       .update({
         caption: clientText,
         client_notes: '',
-        approval_status: 'approved'
+        approval_status: 'pending'
       })
       .eq('id', post.id);
 
@@ -1505,7 +1507,7 @@ function AdminApp() {
       return;
     }
 
-    setStatus(`Το άρθρο "${stripPostTypePrefix(post.title)}" ενημερώθηκε με το κείμενο πελάτη.`);
+    setStatus(`Το άρθρο "${stripPostTypePrefix(post.title)}" ενημερώθηκε και γύρισε σε αναμονή νέας έγκρισης.`);
     await loadPosts();
     setBusy(false);
   }
