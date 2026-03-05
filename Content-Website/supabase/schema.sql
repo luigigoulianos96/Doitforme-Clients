@@ -252,6 +252,8 @@ on public.content_ideas
 for select
 using (status = 'published');
 
+grant select on public.content_ideas to anon, authenticated;
+
 grant update (
   approval_status,
   client_notes,

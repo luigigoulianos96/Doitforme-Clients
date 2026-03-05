@@ -16,8 +16,7 @@ function createEmptyFormState() {
     title: '',
     analysis: '',
     requirements: '',
-    linksText: '',
-    status: 'published'
+    linksText: ''
   };
 }
 
@@ -125,7 +124,7 @@ function useIdeasAdminData(clientSlug) {
       analysis: form.analysis.trim(),
       requirements: form.requirements.trim(),
       inspiration_links: parseLinksText(form.linksText),
-      status: form.status === 'draft' ? 'draft' : 'published',
+      status: 'published',
       approval_status: 'pending',
       client_notes: ''
     };
@@ -153,7 +152,7 @@ function useIdeasAdminData(clientSlug) {
       analysis: `${draft?.analysis || ''}`.trim(),
       requirements: `${draft?.requirements || ''}`.trim(),
       inspiration_links: parseLinksText(draft?.linksText || ''),
-      status: `${draft?.status || 'published'}`.trim() === 'draft' ? 'draft' : 'published',
+      status: 'published',
       approval_status: 'pending',
       client_notes: ''
     };
