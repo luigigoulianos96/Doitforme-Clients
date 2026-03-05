@@ -240,9 +240,8 @@ export default function useArticleAdmin({
   }
 
   function updateArticleDraftField(draftId, field, value) {
-    const nextValue = field === 'body' ? normalizeRichTextHtml(value) : value;
     setArticleDrafts((prev) =>
-      prev.map((draft) => (draft.id === draftId ? { ...draft, [field]: nextValue } : draft))
+      prev.map((draft) => (draft.id === draftId ? { ...draft, [field]: value } : draft))
     );
   }
 

@@ -29,15 +29,22 @@ function RichTextEditor({
   function syncValue() {
     const surface = surfaceRef.current;
     if (!surface) return;
-    const nextHtml = normalizeRichTextHtml(surface.innerHTML);
-    if (surface.innerHTML !== nextHtml) {
-      surface.innerHTML = nextHtml;
+    onChange(surface.innerHTML);
+  }
+
+  function sanitizeSurfaceValue() {
+    const surface = surfaceRef.current;
+    if (surface) {
+      const nextHtml = normalizeRichTextHtml(surface.innerHTML);
+      if (surface.innerHTML !== nextHtml) {
+        surface.innerHTML = nextHtml;
+      }
+      onChange(nextHtml);
     }
-    onChange(nextHtml);
   }
 
   function handleBlur(event) {
-    syncValue();
+    sanitizeSurfaceValue();
     setFocused(false);
     if (onBlur) {
       onBlur(event);
@@ -103,7 +110,7 @@ function RichTextEditor({
       'aria-multiline': 'true',
       style: surfaceStyle,
       onInput: syncValue,
-      onPaste: () => window.setTimeout(syncValue, 0),
+      onPaste: () => window.setTimeout(sanitizeSurfaceValue, 0),
       onFocus: handleFocus,
       onBlur: handleBlur
     })
