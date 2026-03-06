@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Textarea_ } from 'monica-alexandria';
+import { Textarea_ } from 'https://esm.sh/monica-alexandria@4.5.15?dev&external=react,react-dom,styled-components,react-transition-group';
 import { getPreviewText } from '../../utils/previewText.js';
 import {
   ReviewSection,

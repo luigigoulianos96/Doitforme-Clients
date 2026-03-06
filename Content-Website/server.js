@@ -210,6 +210,10 @@ const resolve_local_path = (requestPath) => {
     '/ideas-admin.html': '/public/ideas-admin.html',
     '/ideas-review': '/public/ideas-review.html',
     '/ideas-review.html': '/public/ideas-review.html',
+    '/admin': '/public/admin.html',
+    '/index': '/public/index.html',
+    '/waitlist': '/public/waitlist/index.html',
+    '/waitlist-admin': '/public/waitlist-admin/index.html',
     '/portal.js': '/public/portal.js',
     '/app.js': '/public/app.js',
     '/admin.js': '/public/admin.js',
@@ -226,6 +230,8 @@ const resolve_local_path = (requestPath) => {
   const publicPrefixMap = [
     ['/admin/', '/public/admin/'],
     ['/api/', '/public/api/'],
+    ['/waitlist/', '/public/waitlist/'],
+    ['/waitlist-admin/', '/public/waitlist-admin/'],
     ['/components/', '/public/components/'],
     ['/core/', '/public/core/'],
     ['/hooks/', '/public/hooks/'],
@@ -301,11 +307,13 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Presentation site live at http://localhost:${PORT}`);
-  console.log(`Portal page: http://localhost:${PORT}/public/portal.html`);
-  console.log(`Public page: http://localhost:${PORT}/public/index.html`);
-  console.log(`Admin page: http://localhost:${PORT}/public/admin.html`);
-  console.log(`Ideas admin page: http://localhost:${PORT}/public/ideas-admin.html`);
-  console.log(`Ideas preview page: http://localhost:${PORT}/public/ideas-review.html`);
+  console.log(`Portal page: http://localhost:${PORT}/portal`);
+  console.log(`Public page: http://localhost:${PORT}/index`);
+  console.log(`Admin page: http://localhost:${PORT}/admin`);
+  console.log(`Ideas admin page: http://localhost:${PORT}/ideas-admin`);
+  console.log(`Ideas preview page: http://localhost:${PORT}/ideas-review`);
+  console.log(`Waitlist page: http://localhost:${PORT}/waitlist`);
+  console.log(`Waitlist admin page: http://localhost:${PORT}/waitlist-admin`);
   console.log(`Storage upload endpoint: http://localhost:${PORT}${STORAGE_UPLOAD_ROUTE}`);
   console.log(`Storage delete endpoint: http://localhost:${PORT}${STORAGE_DELETE_ROUTE}`);
   console.log(`Push subscribe endpoint: http://localhost:${PORT}${PUSH_SUBSCRIBE_ROUTE}`);
