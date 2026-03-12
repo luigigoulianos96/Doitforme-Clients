@@ -136,7 +136,11 @@ function useIdeasAdminData(clientSlug) {
       return;
     }
 
-    setIdeas((prev) => [normalizeIdeaRow(data), ...prev]);
+    if (data) {
+      setIdeas((prev) => [normalizeIdeaRow(data), ...prev]);
+    } else {
+      await loadIdeas();
+    }
     setForm(createEmptyFormState());
     setStatus('Η ιδέα αποθηκεύτηκε.');
     setBusy(false);
@@ -164,7 +168,11 @@ function useIdeasAdminData(clientSlug) {
       return;
     }
 
-    setIdeas((prev) => prev.map((idea) => (idea.id === ideaId ? normalizeIdeaRow(data) : idea)));
+    setIdeas((prev) => prev.map((idea) => (
+      idea.id === ideaId
+        ? normalizeIdeaRow(data || { ...idea, ...payload, id: ideaId })
+        : idea
+    )));
     setStatus('Οι αλλαγές αποθηκεύτηκαν και η ιδέα γύρισε σε αναμονή νέας έγκρισης.');
     setSavingId(null);
   }

@@ -141,7 +141,11 @@ function useIdeasReviewData(clientSlug) {
       return false;
     }
 
-    setIdeas((prev) => prev.map((idea) => (idea.id === targetIdeaId ? normalizeIdeaRow(data) : idea)));
+    setIdeas((prev) => prev.map((idea) => (
+      idea.id === targetIdeaId
+        ? normalizeIdeaRow(data || { ...idea, ...payload, id: targetIdeaId })
+        : idea
+    )));
 
     if ((uploadedFeedbackImagePath || options.feedbackImageRemoved) && previousImagePath && previousImagePath !== uploadedFeedbackImagePath) {
       await removeFeedbackAsset(previousImagePath);
