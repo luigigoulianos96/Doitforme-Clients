@@ -217,6 +217,7 @@ function PortalApp() {
   const [password, setPassword] = useState('');
   const [clients, setClients] = useState([]);
   const [posts, setPosts] = useState([]);
+  const [ideas, setIdeas] = useState([]);
   const [clientNameInput, setClientNameInput] = useState('');
   const previousChangesByClientRef = useRef({});
   const notificationsReadyRef = useRef(false);
@@ -268,6 +269,23 @@ function PortalApp() {
     if (postsError) {
       setStatus(`Σφάλμα φόρτωσης posts: ${postsError.message}`);
       return;
+    }
+
+    const { data: ideasData, error: ideasError } = await client
+      .from('content_ideas')
+      .select('id,client_id,approval_status,client_notes,status')
+      .eq('status', 'published');
+
+    if (ideasError) {
+      const ideasMissingTable = `${ideasError.message || ''}`.toLowerCase().includes('content_ideas')
+        && `${ideasError.message || ''}`.toLowerCase().includes('does not exist');
+      if (!ideasMissingTable) {
+        setStatus(`Σφάλμα φόρτωσης ideas: ${ideasError.message}`);
+        return;
+      }
+      setIdeas([]);
+    } else {
+      setIdeas(ideasData || []);
     }
 
     setClients(clientsData || []);
@@ -338,6 +356,7 @@ function PortalApp() {
     setSession(null);
     setClients([]);
     setPosts([]);
+    setIdeas([]);
     previousChangesByClientRef.current = {};
     notificationsReadyRef.current = false;
     setStatus(error ? `Σφάλμα αποσύνδεσης: ${error.message}` : 'Έγινε αποσύνδεση.');
@@ -468,14 +487,22 @@ function PortalApp() {
   }
 
   const changesByClient = useMemo(() => {
-    return posts.reduce((acc, post) => {
+    const postChanges = posts.reduce((acc, post) => {
       const hasPendingNotes = post.approval_status === 'pending' && (post.client_notes || '').trim().length > 0;
       const hasChanges = post.approval_status === 'disapproved' || hasPendingNotes;
       const next = { ...acc };
       next[post.client_id] = (next[post.client_id] || 0) + (hasChanges ? 1 : 0);
       return next;
     }, {});
-  }, [posts]);
+
+    return ideas.reduce((acc, idea) => {
+      const hasPendingNotes = idea.approval_status === 'pending' && (idea.client_notes || '').trim().length > 0;
+      const hasChanges = idea.approval_status === 'disapproved' || hasPendingNotes;
+      const next = { ...acc };
+      next[idea.client_id] = (next[idea.client_id] || 0) + (hasChanges ? 1 : 0);
+      return next;
+    }, postChanges);
+  }, [posts, ideas]);
 
   useEffect(() => {
     if (!session) return;
