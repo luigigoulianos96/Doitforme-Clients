@@ -7,6 +7,18 @@ function getIdeasClient() {
   return createSupabaseClient();
 }
 
+function pickSingleRowResult(result, fallbackMessage) {
+  const { data, error } = result || {};
+  if (error) return { data: null, error };
+  if (Array.isArray(data)) {
+    const firstRow = data[0] || null;
+    if (!firstRow) return { data: null, error: { message: fallbackMessage } };
+    return { data: firstRow, error: null };
+  }
+  if (!data) return { data: null, error: { message: fallbackMessage } };
+  return { data, error: null };
+}
+
 async function fetchClientBySlug(client, slug) {
   return client
     .from('clients')
@@ -31,20 +43,20 @@ async function fetchIdeasByClient(client, clientId, { onlyPublished = false } = 
 }
 
 async function createIdea(client, payload) {
-  return client
+  const result = await client
     .from('content_ideas')
     .insert(payload)
-    .select(IDEAS_SELECT)
-    .single();
+    .select(IDEAS_SELECT);
+  return pickSingleRowResult(result, 'Δεν επιστράφηκε εγγραφή μετά τη δημιουργία ιδέας.');
 }
 
 async function updateIdea(client, ideaId, payload) {
-  return client
+  const result = await client
     .from('content_ideas')
     .update(payload)
     .eq('id', ideaId)
-    .select(IDEAS_SELECT)
-    .single();
+    .select(IDEAS_SELECT);
+  return pickSingleRowResult(result, 'Δεν επιστράφηκε εγγραφή μετά την ενημέρωση ιδέας.');
 }
 
 async function deleteIdea(client, ideaId) {

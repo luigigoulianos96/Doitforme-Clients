@@ -5,6 +5,8 @@ import ActionMenu from './admin/components/ActionMenu.js';
 import CollapsiblePanel from './admin/components/CollapsiblePanel.js';
 import { useIdeasAdminData } from './ideas/hooks/useIdeasAdminData.js';
 import { normalizeIdeaLink } from './ideas/utils/ideaHelpers.js';
+import { enableReviewPushNotifications, isReviewPushSupported, syncReviewPushSubscription } from './services/webPushService.js';
+import { formatHistoryDateTime, useNotesHistory } from './hooks/useNotesHistory.js';
 
 const AppStyle = createGlobalStyle`
   :root {
@@ -355,6 +357,26 @@ const RowText = styled.p`
   white-space: pre-wrap;
 `;
 
+const HistoryWrap = styled.div`
+  margin-top: 0.8rem;
+  display: grid;
+  gap: 0.5rem;
+`;
+
+const HistoryItem = styled.div`
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 24%, transparent);
+  background: color-mix(in srgb, var(--gloomDark) 44%, transparent);
+  padding: 0.55rem 0.7rem;
+  display: grid;
+  gap: 0.35rem;
+`;
+
+const HistoryMeta = styled.small`
+  color: var(--muted);
+  font-size: 1.15rem;
+`;
+
 const RowActions = styled.div`
   display: grid;
   gap: 0.65rem;
@@ -437,7 +459,10 @@ function IdeasAdminApp() {
   const [draftById, setDraftById] = useState({});
   const [newLinkInput, setNewLinkInput] = useState('');
   const [editLinkInputById, setEditLinkInputById] = useState({});
+  const [webPushActive, setWebPushActive] = useState(false);
+  const [notificationState, setNotificationState] = useState('');
   const [clientSlug] = useState(getClientSlugFromUrl);
+  const { notesHistoryByPost } = useNotesHistory(clientSlug, 'ideas');
   const {
     session,
     selectedClient,
@@ -472,6 +497,20 @@ function IdeasAdminApp() {
       return next;
     });
   }, [ideas]);
+
+  useEffect(() => {
+    if (!session) {
+      setWebPushActive(false);
+      return;
+    }
+
+    setWebPushActive(false);
+    syncReviewPushSubscription(session.user?.id || '').then(({ subscription }) => {
+      if (subscription) {
+        setWebPushActive(true);
+      }
+    });
+  }, [session]);
 
   function addFormLink() {
     const normalized = normalizeIdeaLink(newLinkInput);
@@ -537,6 +576,23 @@ function IdeasAdminApp() {
       setCopyState('Το ideas preview link αντιγράφηκε.');
     } catch (_error) {
       setCopyState('Δεν έγινε αντιγραφή του link.');
+    }
+  }
+
+  async function enableDesktopNotifications() {
+    if (!isReviewPushSupported()) {
+      setNotificationState('Ο browser δεν υποστηρίζει web push notifications.');
+      return;
+    }
+
+    try {
+      const { alreadyActive } = await enableReviewPushNotifications(session?.user?.id || '');
+      setWebPushActive(true);
+      setNotificationState(alreadyActive
+        ? 'Οι web push ειδοποιήσεις είναι ήδη ενεργές.'
+        : 'Οι web push ειδοποιήσεις ενεργοποιήθηκαν.');
+    } catch (error) {
+      setNotificationState(error.message || 'Οι web push ειδοποιήσεις δεν ενεργοποιήθηκαν.');
     }
   }
 
@@ -697,11 +753,15 @@ function IdeasAdminApp() {
               <ActionButton type="button" disabled={!previewLink} onClick={copyPreviewLink}>
                 ⧉ Αντιγραφή συνδέσμου
               </ActionButton>
+              <ActionButton type="button" onClick={enableDesktopNotifications} disabled={!session}>
+                {webPushActive ? 'Ειδοποιήσεις ενεργές' : 'Ενεργοποίηση ειδοποιήσεων'}
+              </ActionButton>
             </WorkflowActionRow>
           </WorkflowActionGroup>
 
           {status && <State $tone={inferStatusTone(status)}>{status}</State>}
           {copyState && <State $tone={inferStatusTone(copyState)}>{copyState}</State>}
+          {notificationState && <State $tone={inferStatusTone(notificationState)}>{notificationState}</State>}
         </Hero>
 
         <List>
@@ -739,6 +799,7 @@ function IdeasAdminApp() {
               const draft = draftById[idea.id] || {};
               const saving = `${savingId}` === `${idea.id}`;
               const review = postReviewStatus(idea);
+              const historyEntries = notesHistoryByPost[idea.id] || [];
               return (
                 <Row key={idea.id} $compact={!isExpanded}>
                   <RowMain>
@@ -812,6 +873,21 @@ function IdeasAdminApp() {
                           />
                         </Actions>
                         <RowText><strong>Σημειώσεις πελάτη:</strong> {(idea.client_notes || '').trim() || 'Δεν υπάρχουν σημειώσεις ακόμα.'}</RowText>
+                        <HistoryWrap>
+                          <RowText><strong>Ιστορικό σημειώσεων:</strong></RowText>
+                          {historyEntries.length === 0 ? (
+                            <RowText>Δεν υπάρχει ιστορικό ακόμα.</RowText>
+                          ) : (
+                            historyEntries.map((entry) => (
+                              <HistoryItem key={entry.id || `${idea.id}-${entry.createdAt || ''}`}>
+                                <HistoryMeta>
+                                  {entry.action || 'Σχόλιο'} · {formatHistoryDateTime(entry.createdAt)}
+                                </HistoryMeta>
+                                <RowText>{`${entry.text || ''}`.trim() || 'Χωρίς κείμενο.'}</RowText>
+                              </HistoryItem>
+                            ))
+                          )}
+                        </HistoryWrap>
                       </EditFieldStack>
                     ) : null}
                   </RowMain>
