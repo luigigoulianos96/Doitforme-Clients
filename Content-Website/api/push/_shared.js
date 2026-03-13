@@ -91,13 +91,14 @@ function validateWebPushEnv({ requirePrivate = false } = {}) {
 }
 
 function normalizeContentType(value) {
-  if (value === 'article' || value === 'logo') return value;
+  if (value === 'article' || value === 'logo' || value === 'ideas') return value;
   return 'instagram';
 }
 
 function contentTypeLabel(value) {
   if (value === 'article') return 'Άρθρα';
   if (value === 'logo') return 'Logo Kit';
+  if (value === 'ideas') return 'Ideas';
   return 'FB & IG';
 }
 
@@ -175,6 +176,13 @@ async function validateTargetsForClient(clientId, contentType, payload) {
 
   const targetIds = normalizePositiveIntegers(payload?.targetIds);
   if (targetIds.length === 0) return false;
+
+  if (contentType === 'ideas') {
+    const rows = await supabaseRequest(
+      `content_ideas?client_id=eq.${clientId}&status=eq.published&id=in.(${targetIds.join(',')})&select=id`
+    );
+    return Array.isArray(rows) && rows.length > 0;
+  }
 
   const rows = await supabaseRequest(
     `posts?client_id=eq.${clientId}&status=eq.published&id=in.(${targetIds.join(',')})&select=id`
@@ -257,7 +265,9 @@ function createReviewNotificationPayload(input, clientRecord) {
     body = `${clientName}: νέο attachment feedback στο ${sectionLabel}.`;
   }
 
-  const adminUrl = `/admin.html?client=${encodeURIComponent(clientRecord.slug)}&tab=${encodeURIComponent(contentType)}`;
+  const adminUrl = contentType === 'ideas'
+    ? `/ideas-admin.html?client=${encodeURIComponent(clientRecord.slug)}`
+    : `/admin.html?client=${encodeURIComponent(clientRecord.slug)}&tab=${encodeURIComponent(contentType)}`;
   return {
     title: 'Content Portal',
     body,

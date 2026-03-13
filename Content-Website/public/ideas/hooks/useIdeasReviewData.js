@@ -10,6 +10,7 @@ import {
 } from '../services/ideasService.js';
 import { normalizeIdeaApprovalStatus } from '../utils/ideaHelpers.js';
 import { deleteFile, getPublicUrl, uploadFile } from '../../services/storageService.js';
+import { notifyReviewEvent } from '../../services/reviewPushService.js';
 
 function sanitizePathSegment(value, fallback) {
   const cleaned = `${value || ''}`
@@ -169,6 +170,22 @@ function useIdeasReviewData(clientSlug) {
 
     setStatus((prev) => ({ ...prev, message: successMessage }));
     setSavingId(null);
+
+    await notifyReviewEvent({
+      clientSlug: selectedClient?.slug || clientSlug,
+      clientName: selectedClient?.name || '',
+      contentType: 'ideas',
+      approvalStatus: data?.approval_status || payload?.approval_status || '',
+      hasClientNotes: `${data?.client_notes || ''}`.trim().length > 0,
+      hasFeedbackAttachment: Boolean(
+        data?.client_feedback_image_url
+        || data?.client_feedback_image_path
+        || data?.client_feedback_audio_url
+        || data?.client_feedback_audio_path
+      ),
+      targetIds: [targetIdeaId]
+    });
+
     return true;
   }
 
