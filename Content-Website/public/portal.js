@@ -218,6 +218,7 @@ function PortalApp() {
   const [clients, setClients] = useState([]);
   const [posts, setPosts] = useState([]);
   const [clientNameInput, setClientNameInput] = useState('');
+  const [clientSearchInput, setClientSearchInput] = useState('');
   const previousChangesByClientRef = useRef({});
   const notificationsReadyRef = useRef(false);
 
@@ -477,6 +478,17 @@ function PortalApp() {
     }, {});
   }, [posts]);
 
+  const filteredClients = useMemo(() => {
+    const query = clientSearchInput.trim().toLowerCase();
+    if (!query) return clients;
+
+    return clients.filter((feedClient) => {
+      const name = `${feedClient.name || ''}`.toLowerCase();
+      const slug = `${feedClient.slug || ''}`.toLowerCase();
+      return name.includes(query) || slug.includes(query);
+    });
+  }, [clients, clientSearchInput]);
+
   useEffect(() => {
     if (!session) return;
 
@@ -562,11 +574,18 @@ function PortalApp() {
             <Button type="button" onClick={enableDesktopNotifications}>Ενεργοποίηση ειδοποιήσεων</Button>
             <Button type="button" onClick={handleSignOut}>Αποσύνδεση</Button>
           </Row>
+          <Row>
+            <Input
+              value={clientSearchInput}
+              onChange={(event) => setClientSearchInput(event.target.value)}
+              placeholder="Αναζήτηση πελάτη (όνομα ή slug)"
+            />
+          </Row>
           {status && <Status>{status}</Status>}
         </Hero>
 
         <Grid>
-          {clients.map((feedClient) => {
+          {filteredClients.map((feedClient) => {
             const changes = changesByClient[feedClient.id] || 0;
             return (
               <Card key={feedClient.id}>
@@ -642,6 +661,9 @@ function PortalApp() {
             );
           })}
         </Grid>
+        {clientSearchInput.trim().length > 0 && filteredClients.length === 0 && (
+          <Status>Δεν βρέθηκαν πελάτες για "{clientSearchInput.trim()}".</Status>
+        )}
       </Page>
     </>
   );
