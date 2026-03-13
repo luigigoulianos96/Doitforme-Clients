@@ -286,3 +286,20 @@ with check (
     where p.id = auth.uid() and p.is_admin = true
   )
 );
+
+create table if not exists public.review_notes_history (
+  id bigint generated always as identity primary key,
+  client_id uuid not null references public.clients(id) on delete cascade,
+  content_type text not null check (content_type in ('instagram', 'article', 'logo', 'linkedin', 'ideas')),
+  entity_key text not null,
+  action text not null default '',
+  text_value text not null default '',
+  changes jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists review_notes_history_client_mode_created_idx
+  on public.review_notes_history(client_id, content_type, created_at desc);
+
+create index if not exists review_notes_history_client_mode_entity_idx
+  on public.review_notes_history(client_id, content_type, entity_key, created_at desc);

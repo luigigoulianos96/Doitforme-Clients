@@ -5,7 +5,8 @@ import {
   getIdeasClient,
   hasMissingIdeasTableError,
   normalizeIdeaRow,
-  updateIdea
+  updateIdea,
+  updateIdeaReviewViaApi
 } from '../services/ideasService.js';
 import { normalizeIdeaApprovalStatus } from '../utils/ideaHelpers.js';
 import { deleteFile, getPublicUrl, uploadFile } from '../../services/storageService.js';
@@ -93,12 +94,25 @@ function useIdeasReviewData(clientSlug) {
     let uploadedFeedbackImagePath = '';
     let uploadedFeedbackAudioPath = '';
 
-    const payload = {
-      approval_status: normalizeIdeaApprovalStatus(changes?.approval_status),
-      client_notes: `${changes?.client_notes || ''}`.trim(),
-      ...(options.feedbackImageRemoved ? { client_feedback_image_url: '', client_feedback_image_path: '' } : {}),
-      ...(options.feedbackAudioRemoved ? { client_feedback_audio_url: '', client_feedback_audio_path: '' } : {})
-    };
+    const payload = { ...(changes || {}) };
+
+    if (Object.prototype.hasOwnProperty.call(payload, 'approval_status')) {
+      payload.approval_status = normalizeIdeaApprovalStatus(payload.approval_status);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, 'client_notes')) {
+      payload.client_notes = `${payload.client_notes || ''}`.trim();
+    }
+
+    if (options.feedbackImageRemoved) {
+      payload.client_feedback_image_url = '';
+      payload.client_feedback_image_path = '';
+    }
+
+    if (options.feedbackAudioRemoved) {
+      payload.client_feedback_audio_url = '';
+      payload.client_feedback_audio_path = '';
+    }
 
     if (options.feedbackImageFile) {
       try {
@@ -131,7 +145,11 @@ function useIdeasReviewData(clientSlug) {
       }
     }
 
-    const { data, error } = await updateIdea(client, targetIdeaId, payload);
+    let { data, error } = await updateIdea(client, targetIdeaId, payload);
+    if (error && (selectedClient?.slug || clientSlug)) {
+      ({ data, error } = await updateIdeaReviewViaApi(selectedClient?.slug || clientSlug, targetIdeaId, payload));
+    }
+
     if (error) {
       if (uploadedFeedbackImagePath) await removeFeedbackAsset(uploadedFeedbackImagePath);
       if (uploadedFeedbackAudioPath) await removeFeedbackAsset(uploadedFeedbackAudioPath);

@@ -47,6 +47,34 @@ async function updateIdea(client, ideaId, payload) {
     .single();
 }
 
+async function updateIdeaReviewViaApi(clientSlug, ideaId, changes) {
+  const response = await fetch('/api/ideas/review-update', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      clientSlug,
+      ideaId,
+      changes
+    })
+  });
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch (_error) {
+    payload = null;
+  }
+
+  if (!response.ok || !payload?.ok || !payload?.data) {
+    const message = payload?.error || `API request failed (${response.status})`;
+    return { data: null, error: { message } };
+  }
+
+  return { data: payload.data, error: null };
+}
+
 async function deleteIdea(client, ideaId) {
   return client
     .from('content_ideas')
@@ -84,6 +112,7 @@ export {
   fetchIdeasByClient,
   createIdea,
   updateIdea,
+  updateIdeaReviewViaApi,
   deleteIdea,
   normalizeIdeaRow,
   hasMissingIdeasTableError
