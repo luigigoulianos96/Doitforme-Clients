@@ -5,6 +5,7 @@ import ActionMenu from './admin/components/ActionMenu.js';
 import CollapsiblePanel from './admin/components/CollapsiblePanel.js';
 import { useIdeasAdminData } from './ideas/hooks/useIdeasAdminData.js';
 import { normalizeIdeaLink } from './ideas/utils/ideaHelpers.js';
+import { getPublicUrl } from './services/storageService.js';
 
 const AppStyle = createGlobalStyle`
   :root {
@@ -355,6 +356,72 @@ const RowText = styled.p`
   white-space: pre-wrap;
 `;
 
+const HistoryWrap = styled.div`
+  margin-top: 0.7rem;
+  display: grid;
+  gap: 0.55rem;
+`;
+
+const HistoryItem = styled.div`
+  border: 1px solid color-mix(in srgb, var(--greyDark) 24%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--gloomDark) 38%, transparent);
+  padding: 0.55rem 0.68rem;
+  display: grid;
+  gap: 0.35rem;
+`;
+
+const HistoryMeta = styled.small`
+  color: var(--muted);
+`;
+
+const HistoryText = styled.p`
+  margin: 0;
+  color: var(--text);
+  white-space: pre-wrap;
+`;
+
+const AttachmentGrid = styled.div`
+  margin-top: 0.65rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.55rem;
+`;
+
+const AttachmentCard = styled.article`
+  border: 1px solid color-mix(in srgb, var(--greyDark) 24%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--gloomDark) 38%, transparent);
+  padding: 0.55rem 0.68rem;
+  display: grid;
+  gap: 0.4rem;
+`;
+
+const AttachmentThumb = styled.a`
+  display: block;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--greyDark) 30%, transparent);
+
+  img {
+    display: block;
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+  }
+`;
+
+const AttachmentAudio = styled.audio`
+  width: 100%;
+`;
+
+const AttachmentLink = styled.a`
+  color: var(--accent);
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-decoration: none;
+`;
+
 const RowActions = styled.div`
   display: grid;
   gap: 0.65rem;
@@ -418,6 +485,18 @@ function postReviewLabel(state) {
   return 'Χρειάζεται αλλαγές';
 }
 
+function formatHistoryDateTime(iso) {
+  const value = new Date(iso);
+  if (Number.isNaN(value.getTime())) return '-';
+  return value.toLocaleString('el-GR', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
 function linksFromText(value) {
   return `${value || ''}`
     .split('\n')
@@ -427,6 +506,18 @@ function linksFromText(value) {
 
 function linksToText(value) {
   return (value || []).join('\n');
+}
+
+function resolveFeedbackAttachmentUrl(url, path) {
+  const directUrl = `${url || ''}`.trim();
+  if (directUrl) return directUrl;
+  const storagePath = `${path || ''}`.trim();
+  if (!storagePath) return '';
+  try {
+    return getPublicUrl(storagePath);
+  } catch {
+    return '';
+  }
 }
 
 function IdeasAdminApp() {
@@ -449,6 +540,7 @@ function IdeasAdminApp() {
     busy,
     savingId,
     previewLink,
+    historyByIdeaId,
     signIn,
     signOut,
     addIdea,
@@ -739,6 +831,10 @@ function IdeasAdminApp() {
               const draft = draftById[idea.id] || {};
               const saving = `${savingId}` === `${idea.id}`;
               const review = postReviewStatus(idea);
+              const historyEntries = historyByIdeaId[`${idea.id}`] || [];
+              const feedbackImageUrl = resolveFeedbackAttachmentUrl(idea.client_feedback_image_url, idea.client_feedback_image_path);
+              const feedbackAudioUrl = resolveFeedbackAttachmentUrl(idea.client_feedback_audio_url, idea.client_feedback_audio_path);
+              const hasFeedbackAttachment = Boolean(feedbackImageUrl || feedbackAudioUrl);
               return (
                 <Row key={idea.id} $compact={!isExpanded}>
                   <RowMain>
@@ -811,7 +907,58 @@ function IdeasAdminApp() {
                             ]}
                           />
                         </Actions>
-                        <RowText><strong>Σημειώσεις πελάτη:</strong> {(idea.client_notes || '').trim() || 'Δεν υπάρχουν σημειώσεις ακόμα.'}</RowText>
+                        <RowText><strong>Τελευταία σημείωση πελάτη:</strong> {(idea.client_notes || '').trim() || 'Δεν υπάρχουν σημειώσεις ακόμα.'}</RowText>
+                        <HistoryWrap>
+                          <RowText><strong>Ιστορικό σημειώσεων:</strong></RowText>
+                          {historyEntries.length === 0 ? (
+                            <RowText>Δεν υπάρχουν προηγούμενες σημειώσεις στο ιστορικό.</RowText>
+                          ) : (
+                            historyEntries.map((entry) => (
+                              <HistoryItem key={`${idea.id}-${entry.id}`}>
+                                <HistoryMeta>{formatHistoryDateTime(entry.createdAt)} • {entry.action || 'Σημείωση'}</HistoryMeta>
+                                {(entry.text || '').trim() ? (
+                                  <HistoryText>{entry.text}</HistoryText>
+                                ) : null}
+                                {(entry.changes || []).map((change, changeIndex) => (
+                                  <HistoryText key={`${entry.id}-change-${changeIndex}`}>
+                                    {change?.type === 'removed' ? '−' : '+'} {change?.paragraph || ''}
+                                  </HistoryText>
+                                ))}
+                              </HistoryItem>
+                            ))
+                          )}
+                        </HistoryWrap>
+                        <HistoryWrap>
+                          <RowText><strong>Client feedback attachments:</strong></RowText>
+                          {hasFeedbackAttachment ? (
+                            <AttachmentGrid>
+                              {feedbackImageUrl ? (
+                                <AttachmentCard>
+                                  <HistoryMeta>Screenshot</HistoryMeta>
+                                  <AttachmentThumb href={feedbackImageUrl} target="_blank" rel="noreferrer">
+                                    <img src={feedbackImageUrl} alt={`Client feedback screenshot για ${idea.title || 'idea'}`} loading="lazy" />
+                                  </AttachmentThumb>
+                                  <AttachmentLink href={feedbackImageUrl} target="_blank" rel="noreferrer">
+                                    Άνοιγμα εικόνας
+                                  </AttachmentLink>
+                                </AttachmentCard>
+                              ) : null}
+                              {feedbackAudioUrl ? (
+                                <AttachmentCard>
+                                  <HistoryMeta>Audio</HistoryMeta>
+                                  <AttachmentAudio controls preload="none" src={feedbackAudioUrl}>
+                                    Ο browser δεν υποστηρίζει audio playback.
+                                  </AttachmentAudio>
+                                  <AttachmentLink href={feedbackAudioUrl} target="_blank" rel="noreferrer">
+                                    Άνοιγμα ή λήψη ήχου
+                                  </AttachmentLink>
+                                </AttachmentCard>
+                              ) : null}
+                            </AttachmentGrid>
+                          ) : (
+                            <RowText>Δεν υπάρχει client attachment.</RowText>
+                          )}
+                        </HistoryWrap>
                       </EditFieldStack>
                     ) : null}
                   </RowMain>

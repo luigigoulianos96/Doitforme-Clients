@@ -10,6 +10,7 @@ import {
   updateIdea
 } from '../services/ideasService.js';
 import { linksToText, parseLinksText } from '../utils/ideaHelpers.js';
+import { fetchReviewHistory } from '../../services/reviewHistoryService.js';
 
 function createEmptyFormState() {
   return {
@@ -30,6 +31,7 @@ function useIdeasAdminData(clientSlug) {
   const [configError, setConfigError] = useState('');
   const [busy, setBusy] = useState(false);
   const [savingId, setSavingId] = useState(null);
+  const [historyByIdeaId, setHistoryByIdeaId] = useState({});
 
   useEffect(() => {
     const supabaseClient = getIdeasClient();
@@ -60,6 +62,14 @@ function useIdeasAdminData(clientSlug) {
     loadIdeas();
   }, [client, session, selectedClient?.id]);
 
+  useEffect(() => {
+    if (!selectedClient?.slug) {
+      setHistoryByIdeaId({});
+      return;
+    }
+    loadReviewHistory();
+  }, [selectedClient?.slug]);
+
   async function loadSelectedClient() {
     const { data, error } = await fetchClientBySlug(client, clientSlug);
     if (error) {
@@ -82,6 +92,37 @@ function useIdeasAdminData(clientSlug) {
     }
 
     setIdeas((data || []).map(normalizeIdeaRow));
+    await loadReviewHistory();
+  }
+
+  async function loadReviewHistory() {
+    const targetSlug = `${selectedClient?.slug || ''}`.trim();
+    if (!targetSlug) {
+      setHistoryByIdeaId({});
+      return;
+    }
+
+    const { entries, error } = await fetchReviewHistory(targetSlug, 'ideas');
+    if (error) {
+      setHistoryByIdeaId({});
+      return;
+    }
+
+    const grouped = (entries || []).reduce((acc, entry) => {
+      const entityKey = `${entry?.entityKey || ''}`.trim();
+      if (!entityKey) return acc;
+      const normalizedEntry = {
+        id: `${entry?.id || ''}`.trim() || `db-${Date.now()}`,
+        text: `${entry?.text || ''}`,
+        changes: Array.isArray(entry?.changes) ? entry.changes : [],
+        action: `${entry?.action || ''}`,
+        createdAt: entry?.createdAt || new Date().toISOString()
+      };
+      acc[entityKey] = [...(acc[entityKey] || []), normalizedEntry];
+      return acc;
+    }, {});
+
+    setHistoryByIdeaId(grouped);
   }
 
   async function signIn(email, password) {
@@ -107,6 +148,7 @@ function useIdeasAdminData(clientSlug) {
     setSession(null);
     setSelectedClient(null);
     setIdeas([]);
+    setHistoryByIdeaId({});
   }
 
   async function addIdea() {
@@ -235,6 +277,7 @@ function useIdeasAdminData(clientSlug) {
     busy,
     savingId,
     previewLink,
+    historyByIdeaId,
     signIn,
     signOut,
     addIdea,
