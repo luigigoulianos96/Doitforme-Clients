@@ -411,14 +411,22 @@ function PostCard({
     }
   }
 
-  function handleQueueAttachment() {
+  async function handleSendDraftAttachment() {
     if (!draftAttachmentFile) return;
-    setQueuedAttachmentFile(draftAttachmentFile);
-    setQueuedAttachmentName(draftAttachmentFile.name);
+    const ok = await onUpdateReview(
+      targetPostIds,
+      {},
+      t.attachmentUploaded,
+      { feedbackImageFile: draftAttachmentFile }
+    );
+    if (!ok) return;
+    onAppendHistory(post.id, draftAttachmentFile.name, t.attachment);
+    setQueuedAttachmentFile(null);
+    setQueuedAttachmentName('');
     setDraftAttachmentFile(null);
     setAttachmentError('');
-    setHideStoredAttachment(true);
-    onAppendHistory(post.id, draftAttachmentFile.name, t.attachment);
+    setRemoveStoredAttachment(false);
+    setHideStoredAttachment(false);
   }
 
   function handleRemoveStoredAttachment() {
@@ -490,14 +498,37 @@ function PostCard({
 
   async function handleSaveNotes() {
     if (noteMissing) return;
+    const nextFeedbackFile = draftAttachmentFile || queuedAttachmentFile;
     const saveMessage = isStorySectionReview
       ? t.storyNotesSaved
       : t.notesSaved;
-    const ok = await onUpdateReview(targetPostIds, { client_notes: trimmedNotes }, saveMessage);
+    const ok = await onUpdateReview(
+      targetPostIds,
+      {
+        client_notes: trimmedNotes,
+        ...(removeStoredAttachment && !nextFeedbackFile ? {
+          client_feedback_image_url: '',
+          client_feedback_image_path: ''
+        } : {})
+      },
+      saveMessage,
+      {
+        feedbackImageFile: nextFeedbackFile,
+        feedbackImageRemoved: removeStoredAttachment && !nextFeedbackFile
+      }
+    );
     if (!ok) return;
     onAppendHistory(post.id, trimmedNotes, t.noteAction);
+    if (nextFeedbackFile) {
+      onAppendHistory(post.id, nextFeedbackFile.name, t.attachment);
+    }
     setNotes('');
     setNotesOpen(false);
+    clearDraftAttachmentSelection();
+    setQueuedAttachmentFile(null);
+    setQueuedAttachmentName('');
+    setRemoveStoredAttachment(false);
+    setHideStoredAttachment(false);
   }
 
   async function handleDecision(nextStatus) {
@@ -761,7 +792,7 @@ function PostCard({
                 'button',
                 {
                   type: 'button',
-                  onClick: handleQueueAttachment,
+                  onClick: handleSendDraftAttachment,
                   disabled: pending,
                   style: getMiniActionStyle('confirm')
                 },
