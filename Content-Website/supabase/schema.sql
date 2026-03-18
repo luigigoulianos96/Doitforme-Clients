@@ -286,3 +286,13 @@ with check (
     where p.id = auth.uid() and p.is_admin = true
   )
 );
+
+-- Harden review notes audit table exposed in public schema
+alter table if exists public.review_notes_history enable row level security;
+
+drop policy if exists "No direct public access to review notes history" on public.review_notes_history;
+create policy "No direct public access to review notes history"
+on public.review_notes_history
+for all
+using (false)
+with check (false);
