@@ -1601,7 +1601,7 @@ function AdminApp() {
           <Hero>
             <Eyebrow>AUTH REQUIRED</Eyebrow>
             <Title>Σύνδεση μέσω Portal</Title>
-            <Subtitle>Η πρόσβαση στο admin γίνεται μόνο από το Portal: Login -> Portal -> Επιλογή Client -> Admin.</Subtitle>
+            <Subtitle>Η πρόσβαση στο admin γίνεται μόνο από το Portal: Login → Portal → Επιλογή Client → Admin.</Subtitle>
             <Actions>
               <ActionButton type="button" $type="primary" onClick={() => { window.location.href = './portal.html'; }}>
                 Μετάβαση στο Portal Login
