@@ -1412,8 +1412,7 @@ function AdminApp() {
         title: nextTitle,
         image_url: nextImageUrl,
         image_path: nextImagePath,
-        approval_status: 'pending',
-        client_notes: ''
+        approval_status: 'pending'
       })
       .eq('id', post.id);
 
@@ -1496,7 +1495,7 @@ function AdminApp() {
       .from('posts')
       .update({
         caption: clientText,
-        client_notes: '',
+        client_notes: clientText,
         approval_status: 'pending'
       })
       .eq('id', post.id);

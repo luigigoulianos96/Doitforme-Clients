@@ -7,6 +7,7 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const pushVapidPublicKeyHandler = require('./api/push/vapid-public-key.js');
 const pushSubscribeHandler = require('./api/push/subscribe.js');
 const pushNotifyReviewEventHandler = require('./api/push/notify-review-event.js');
+const reviewHistoryHandler = require('./api/review-history.js');
 
 const PORT = process.env.PORT || 4180;
 const ROOT_DIR = __dirname;
@@ -17,6 +18,7 @@ const STORAGE_DELETE_ROUTE = '/api/storage/delete';
 const PUSH_VAPID_PUBLIC_KEY_ROUTE = '/api/push/vapid-public-key';
 const PUSH_SUBSCRIBE_ROUTE = '/api/push/subscribe';
 const PUSH_NOTIFY_REVIEW_EVENT_ROUTE = '/api/push/notify-review-event';
+const REVIEW_HISTORY_ROUTE = '/api/review-history';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -284,6 +286,11 @@ const server = http.createServer(async (req, res) => {
 
   if (normalizedPath === PUSH_NOTIFY_REVIEW_EVENT_ROUTE) {
     await pushNotifyReviewEventHandler(req, res);
+    return;
+  }
+
+  if (normalizedPath === REVIEW_HISTORY_ROUTE) {
+    await reviewHistoryHandler(req, res);
     return;
   }
 

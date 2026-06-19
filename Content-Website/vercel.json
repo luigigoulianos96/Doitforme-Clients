@@ -7,6 +7,7 @@
     { "source": "/api/push/vapid-public-key", "destination": "/api/push/vapid-public-key.js" },
     { "source": "/api/push/subscribe", "destination": "/api/push/subscribe.js" },
     { "source": "/api/push/notify-review-event", "destination": "/api/push/notify-review-event.js" },
+    { "source": "/api/review-history", "destination": "/api/review-history.js" },
     { "source": "/", "destination": "/public/portal.html" },
     { "source": "/portal", "destination": "/public/portal.html" },
     { "source": "/admin", "destination": "/public/admin.html" },

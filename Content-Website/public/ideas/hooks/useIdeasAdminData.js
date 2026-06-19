@@ -157,8 +157,7 @@ function useIdeasAdminData(clientSlug) {
       requirements: `${draft?.requirements || ''}`.trim(),
       inspiration_links: parseLinksText(draft?.linksText || ''),
       status: 'published',
-      approval_status: 'pending',
-      client_notes: ''
+      approval_status: 'pending'
     };
 
     const { data, error } = await updateIdea(client, ideaId, payload);
