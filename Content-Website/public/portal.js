@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createClient } from '@supabase/supabase-js';
 import styled, { createGlobalStyle } from 'styled-components';
 import { deleteFile as deleteStorageFile } from './services/storageService.js';
+import { createSupabaseClient } from './services/supabaseClient.js';
 import { enableReviewPushNotifications, isReviewPushSupported, syncReviewPushSubscription } from './services/webPushService.js';
 
 const AppStyle = createGlobalStyle`
@@ -159,14 +159,6 @@ const Badge = styled.span`
   font-weight: 700;
 `;
 
-function createSupabaseClient() {
-  const config = window.APP_CONFIG || {};
-  if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY || config.SUPABASE_URL.includes('PASTE_')) {
-    return null;
-  }
-  return createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
-}
-
 function createStorageAdapter() {
   return {
     async remove(paths) {
@@ -204,6 +196,7 @@ function slugify(value) {
 function PortalApp() {
   const [client, setClient] = useState(null);
   const [session, setSession] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
   const [status, setStatus] = useState('');
   const [configError, setConfigError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -229,16 +222,42 @@ function PortalApp() {
       return;
     }
 
+    let active = true;
     setClient(supabaseClient);
-    supabaseClient.auth.getSession().then(({ data }) => {
-      setSession(data.session || null);
-    });
 
     const { data: listener } = supabaseClient.auth.onAuthStateChange((_event, newSession) => {
+      if (!active) return;
       setSession(newSession);
+      setAuthReady(true);
     });
 
-    return () => listener.subscription.unsubscribe();
+    supabaseClient.auth.getSession()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          setSession(null);
+          setStatus(
+            error.status === 429
+              ? 'Έγιναν πολλές προσπάθειες ανανέωσης σύνδεσης. Περίμενε λίγο και δοκίμασε ξανά.'
+              : `Σφάλμα ελέγχου σύνδεσης: ${error.message}`
+          );
+          return;
+        }
+        setSession(data.session || null);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setSession(null);
+        setStatus(`Σφάλμα ελέγχου σύνδεσης: ${error.message || 'Άγνωστο σφάλμα'}`);
+      })
+      .finally(() => {
+        if (active) setAuthReady(true);
+      });
+
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   async function loadPortalData() {
@@ -317,25 +336,40 @@ function PortalApp() {
 
   async function handleSignIn(event) {
     event.preventDefault();
-    if (!client) return;
+    if (!client || !authReady || busy) return;
 
     setBusy(true);
     setStatus('Γίνεται σύνδεση...');
 
-    const { error } = await client.auth.signInWithPassword({ email, password });
-    if (error) {
-      setStatus(`Σφάλμα σύνδεσης: ${error.message}`);
-      setBusy(false);
-      return;
-    }
+    try {
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
+      if (error) {
+        setStatus(
+          error.status === 429
+            ? 'Έγιναν πολλές προσπάθειες σύνδεσης. Περίμενε λίγο πριν δοκιμάσεις ξανά.'
+            : `Σφάλμα σύνδεσης: ${error.message}`
+        );
+        return;
+      }
 
-    setStatus('Συνδέθηκες επιτυχώς.');
-    setBusy(false);
+      if (!data.session) {
+        setStatus('Η σύνδεση ολοκληρώθηκε χωρίς ενεργό session. Δοκίμασε ξανά.');
+        return;
+      }
+
+      setSession(data.session);
+      setPassword('');
+      setStatus('Συνδέθηκες επιτυχώς.');
+    } catch (error) {
+      setStatus(`Σφάλμα σύνδεσης: ${error.message || 'Άγνωστο σφάλμα'}`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleSignOut() {
     if (!client) return;
-    const { error } = await client.auth.signOut();
+    const { error } = await client.auth.signOut({ scope: 'local' });
     setSession(null);
     setClients([]);
     setPosts([]);
@@ -547,11 +581,13 @@ function PortalApp() {
             <p>Συνδέσου για να διαχειριστείς πολλαπλά client feeds.</p>
             <LoginForm onSubmit={handleSignIn}>
               <Row $stack>
-                <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" required />
-                <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Κωδικός" required />
+                <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" required disabled={!authReady || busy} />
+                <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Κωδικός" required disabled={!authReady || busy} />
               </Row>
               <Row>
-                <Button $primary type="submit" disabled={busy}>{busy ? 'Περίμενε...' : 'Σύνδεση'}</Button>
+                <Button $primary type="submit" disabled={!authReady || busy}>
+                  {!authReady ? 'Έλεγχος σύνδεσης...' : busy ? 'Περίμενε...' : 'Σύνδεση'}
+                </Button>
               </Row>
             </LoginForm>
             {status && <Status>{status}</Status>}
